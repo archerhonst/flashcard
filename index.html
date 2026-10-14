@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#0e1116">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>闪卡 · FlashCards</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div id="app"></div>
+<div id="modal-root"></div>
+<div id="toast"></div>
+
+<!-- 传统 script 标签（非 ES Module）：
+     APK 里用 file:// 或 WebViewAssetLoader 加载都不会踩 CORS 的坑 -->
+<!-- i18n 必须最先：util.js / plugins.js 在加载时就要取 global.I18n.T。
+     en.js 必须紧跟 i18n.js（它调用 I18n.register）。 -->
+<script src="js/i18n.js"></script>
+<script src="js/lang/en.js"></script>
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/cloze.js"></script>
+<script src="js/plugins.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

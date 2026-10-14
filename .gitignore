@@ -1,0 +1,24 @@
+# ---- Android / Gradle 构建产物（不入库）----
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+.gradle/
+build/
+*.iml
+
+# ---- 打包出来的安装包与签名（构建产物，不入库）----
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ---- 编辑器 / 工具 ----
+.hopweb/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

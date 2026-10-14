@@ -1,0 +1,63 @@
+{
+  "id": "my.firstplugin",
+  "name": "我的第一个卡型",
+  "icon": "🧩",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "最小可用的插件骨架：复制这个文件，改 id / name / fields / templates 即可。",
+  "mode": "template",
+  "fields": [
+    {
+      "key": "q",
+      "label": "问题",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "正面显示的内容"
+    },
+    {
+      "key": "a",
+      "label": "答案",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "背面显示的内容"
+    },
+    {
+      "key": "note",
+      "label": "补充",
+      "type": "textarea",
+      "placeholder": "选填，只在背面显示"
+    }
+  ],
+  "templates": {
+    "front": "<div class=\"my-q\">{{q}}</div>",
+    "back": "<div class=\"my-q\">{{q}}</div><hr class=\"fc-hr\"><div class=\"my-a\">{{{a}}}</div>{{#note}}<div class=\"my-note\">{{{note}}}</div>{{/note}}"
+  },
+  "css": ".my-q{font-weight:600;font-size:1.1em}.my-a{line-height:1.7}.my-note{margin-top:.6em;font-size:.9em;opacity:.7}",
+  "ai": {
+    "kind": "cards",
+    "prompt": "把下面的材料拆成 {{count}} 张问答卡。\n只输出 JSON，格式：{\"cards\":[{\"q\":\"问题\",\"a\":\"答案\",\"note\":\"补充说明，可留空\"}]}\n\n材料：\n{{text}}"
+  },
+  "i18n": {
+    "en": {
+      "name": "My first card type",
+      "description": "The smallest usable plugin skeleton: copy this file and change id / name / fields / templates.",
+      "fields": {
+        "q": {
+          "label": "Question",
+          "placeholder": "What shows on the front"
+        },
+        "a": {
+          "label": "Answer",
+          "placeholder": "What shows on the back"
+        },
+        "note": {
+          "label": "Notes",
+          "placeholder": "Optional, shown on the back only"
+        }
+      },
+      "ai": {
+        "prompt": "Split the material below into {{count}} question-and-answer flashcards.\nOutput JSON only, in the form: {\"cards\":[{\"q\":\"question\",\"a\":\"answer\",\"note\":\"extra note, may be empty\"}]}\n\nMaterial:\n{{text}}"
+      }
+    }
+  }
+}

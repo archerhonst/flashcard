@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 24/25 没有自适应图标，这里给一个自包含的矢量图作回退。
+  内容与 mipmap-anydpi-v26/ic_launcher.xml 视觉一致，只是把背景直接画进来。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#0E1116"
+        android:pathData="M0,0 H108 V108 H0 Z" />
+
+    <path
+        android:fillColor="#3B82F6"
+        android:fillAlpha="0.35"
+        android:pathData="M35,20 H73 A7,7 0 0 1 80,27 V57 A7,7 0 0 1 73,64 H35 A7,7 0 0 1 28,57 V27 A7,7 0 0 1 35,20 Z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M27,36 H65 A7,7 0 0 1 72,43 V73 A7,7 0 0 1 65,80 H27 A7,7 0 0 1 20,73 V43 A7,7 0 0 1 27,36 Z" />
+
+    <path
+        android:pathData="M30,48.5 H62"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M30,58.5 H54"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M30,68.5 H46"
+        android:strokeColor="#3B82F6"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+</vector>

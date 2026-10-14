@@ -1,0 +1,62 @@
+{
+  "id": "example.lawcloze",
+  "name": "法条挖空",
+  "icon": "⚖️",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "示例插件：在法条/条文上做挖空。演示 mode:\"cloze\" 与 cloze 字段类型，AI 会自动只挖关键要件。",
+  "mode": "cloze",
+  "fields": [
+    {
+      "key": "text",
+      "label": "条文（用 {{c1::…}} 挖空）",
+      "type": "cloze",
+      "required": true,
+      "hint": "选中文字后点「挖空选中」，或直接手打 {{c1::要挖掉的内容::可选提示}}"
+    },
+    {
+      "key": "source",
+      "label": "法条出处",
+      "type": "text",
+      "placeholder": "例如：《民法典》第 577 条"
+    },
+    {
+      "key": "note",
+      "label": "理解与考点",
+      "type": "textarea",
+      "placeholder": "选填，背面显示"
+    }
+  ],
+  "templates": {
+    "front": "{{{text}}}",
+    "back": "{{{text}}}{{#source}}<hr class=\"fc-hr\"><div class=\"law-src\">📖 {{source}}</div>{{/source}}{{#note}}<div class=\"law-note\">{{{note}}}</div>{{/note}}"
+  },
+  "css": ".law-src{color:#f59e0b;font-size:.9em}.law-note{margin-top:.7em;opacity:.75;font-size:.92em;line-height:1.7;border-left:3px solid rgba(148,163,184,.35);padding-left:.7em}",
+  "ai": {
+    "kind": "cloze",
+    "prompt": "下面是一段法条或规范性文本。请用闪卡挖空标记把它做成记忆卡片。\n要求：\n1. 只挖「要件、数额、期限、主体、例外情形」这类必须精确记忆的关键词，一张卡挖 {{count}} 个空左右；\n2. 挖空格式必须是 {{c1::原文内容}}，同一个空如果想给提示就写 {{c1::原文内容::提示}}；\n3. 除挖空标记外，原文必须逐字保留，一个字都不要改写、不要总结、不要增删标点；\n4. 编号 c1、c2、c3… 依次递增。\n只输出 JSON，格式：{\"text\":\"带挖空标记的完整原文\"}\n\n原文：\n{{text}}"
+  },
+  "i18n": {
+    "en": {
+      "name": "Statute cloze",
+      "description": "Example plugin: build cloze cards on statutes and clauses. Demonstrates mode:\"cloze\" and the cloze field type; AI blanks only the key elements.",
+      "fields": {
+        "text": {
+          "label": "Text (blank it with {{c1::…}})",
+          "hint": "Select some text and tap \"Cloze selection\", or type {{c1::the text to hide::optional hint}} directly"
+        },
+        "source": {
+          "label": "Statute source",
+          "placeholder": "e.g. Civil Code art. 577"
+        },
+        "note": {
+          "label": "Understanding / key points",
+          "placeholder": "Optional, shown on the back"
+        }
+      },
+      "ai": {
+        "prompt": "Below is a statute or a piece of normative text. Turn it into memorisation cards using flashcard cloze markers.\nRequirements:\n1. Blank only the keywords that must be remembered exactly — elements, amounts, deadlines, subjects, exceptions — about {{count}} blanks per card;\n2. The cloze format must be {{c1::original text}}; to give a hint for a blank write {{c1::original text::hint}};\n3. Apart from the cloze markers the original text must be preserved word for word — do not rewrite, do not summarise, do not add or drop anything, not even punctuation;\n4. Number them c1, c2, c3… in increasing order.\nOutput JSON only, in the form: {\"text\":\"the complete original text with cloze markers\"}\n\nOriginal text:\n{{text}}"
+      }
+    }
+  }
+}

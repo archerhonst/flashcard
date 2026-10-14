@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      只用 AppCompat 主题，不引 Material 组件库 —— 整个 UI 都是网页画的，
+      Android 侧只需要一个无标题栏的容器。
+    -->
+    <style name="Theme.FlashCards" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/window_bg</item>
+        <item name="android:statusBarColor">@color/window_bg</item>
+        <item name="android:navigationBarColor">@color/window_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

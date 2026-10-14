@@ -1,0 +1,119 @@
+{
+  "id": "example.code",
+  "name": "代码 / API 记忆",
+  "icon": "💻",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "示例插件：记忆函数签名、参数、返回值与易错点。演示 number / checkbox 字段和 {{^}} 反向区块。",
+  "mode": "template",
+  "fields": [
+    {
+      "key": "api",
+      "label": "函数 / API 名",
+      "type": "text",
+      "required": true,
+      "placeholder": "例如：Array.prototype.splice"
+    },
+    {
+      "key": "lang",
+      "label": "语言",
+      "type": "select",
+      "options": [
+        "JavaScript",
+        "TypeScript",
+        "Python",
+        "Java",
+        "Kotlin",
+        "Go",
+        "Rust",
+        "SQL",
+        "Bash",
+        "其他"
+      ],
+      "default": "JavaScript"
+    },
+    {
+      "key": "signature",
+      "label": "签名",
+      "type": "textarea",
+      "placeholder": "splice(start, deleteCount, ...items)"
+    },
+    {
+      "key": "returns",
+      "label": "返回值",
+      "type": "text"
+    },
+    {
+      "key": "example",
+      "label": "示例代码",
+      "type": "textarea"
+    },
+    {
+      "key": "pitfall",
+      "label": "易错点 / 坑",
+      "type": "textarea"
+    },
+    {
+      "key": "since",
+      "label": "起始版本",
+      "type": "number",
+      "hint": "选填，留空则不显示"
+    },
+    {
+      "key": "mutates",
+      "label": "会修改原对象",
+      "type": "checkbox",
+      "default": false
+    }
+  ],
+  "templates": {
+    "front": "<div class=\"cd-api\"><span class=\"cd-lang\">{{lang}}</span>{{api}}</div>{{#signature}}<pre class=\"cd-sig\">{{signature}}</pre>{{/signature}}{{^signature}}<div class=\"cd-hint\">回忆它的参数与返回值</div>{{/signature}}",
+    "back": "<div class=\"cd-api\"><span class=\"cd-lang\">{{lang}}</span>{{api}}</div>{{#signature}}<pre class=\"cd-sig\">{{signature}}</pre>{{/signature}}{{#returns}}<div class=\"cd-ret\">↩︎ 返回：{{returns}}</div>{{/returns}}<div class=\"cd-flags\">{{#mutates}}<span class=\"cd-flag cd-flag--warn\">⚠️ 修改原对象</span>{{/mutates}}{{#since}}<span class=\"cd-flag\">修订版 {{since}}</span>{{/since}}</div>{{#example}}<pre class=\"cd-eg\">{{example}}</pre>{{/example}}{{#pitfall}}<div class=\"cd-pit\">💥 {{pitfall}}</div>{{/pitfall}}"
+  },
+  "css": ".cd-api{font-size:1.15em;font-weight:700;font-family:monospace}.cd-lang{display:inline-block;background:rgba(168,85,247,.18);color:#c084fc;border-radius:.4em;padding:.05em .45em;margin-right:.5em;font-size:.7em;font-family:system-ui;vertical-align:middle}.cd-sig{background:rgba(148,163,184,.12);border-radius:.5em;padding:.6em .8em;font-size:.88em;overflow-x:auto;white-space:pre-wrap;word-break:break-all}.cd-eg{background:rgba(148,163,184,.12);border-radius:.5em;padding:.6em .8em;font-size:.82em;overflow-x:auto;white-space:pre-wrap}.cd-ret{margin-top:.6em;color:#34d399;font-size:.95em}.cd-hint{opacity:.5;font-size:.9em;margin-top:.5em}.cd-flags{margin-top:.5em;display:flex;gap:.4em;flex-wrap:wrap}.cd-flag{font-size:.75em;opacity:.7;border:1px solid rgba(148,163,184,.35);border-radius:1em;padding:.05em .6em}.cd-flag--warn{color:#fbbf24;border-color:rgba(251,191,36,.5);opacity:1}.cd-pit{margin-top:.6em;color:#f87171;font-size:.9em}",
+  "ai": {
+    "kind": "cards",
+    "prompt": "把下面的材料拆成 {{count}} 张编程知识闪卡。\n每张卡字段：\n- api：函数、方法或 API 的完整名字\n- lang：语言，只能取 JavaScript/TypeScript/Python/Java/Kotlin/Go/Rust/SQL/Bash/其他\n- signature：调用签名，写清参数名与可选性；如果没有参数就填空字符串\n- returns：返回值说明，可空\n- example：一段能跑的最小示例代码\n- pitfall：常见坑，可留空\n- since：该特性引入的主版本号（数字，如 2015）；不确定就填空字符串并让 mutates 为 false\n- mutates：是否会修改原对象，true 或 false\n只输出 JSON，格式：{\"cards\":[{\"api\":\"...\",\"lang\":\"JavaScript\",\"signature\":\"...\",\"returns\":\"...\",\"example\":\"...\",\"pitfall\":\"...\",\"since\":2015,\"mutates\":false}]}\n\n材料：\n{{text}}"
+  },
+  "i18n": {
+    "en": {
+      "name": "Code / API memory",
+      "description": "Example plugin: memorise function signatures, parameters, return values and pitfalls. Demonstrates number / checkbox fields and the {{^}} inverted section.",
+      "fields": {
+        "api": {
+          "label": "Function / API name",
+          "placeholder": "e.g. Array.prototype.splice"
+        },
+        "lang": {
+          "label": "Language",
+          "options": {
+            "其他": "Other"
+          }
+        },
+        "signature": {
+          "label": "Signature",
+          "placeholder": "splice(start, deleteCount, ...items)"
+        },
+        "returns": {
+          "label": "Return value"
+        },
+        "example": {
+          "label": "Example code"
+        },
+        "pitfall": {
+          "label": "Pitfalls"
+        },
+        "since": {
+          "label": "Since version",
+          "hint": "Optional; hidden when left empty"
+        },
+        "mutates": {
+          "label": "Mutates the original"
+        }
+      },
+      "ai": {
+        "prompt": "Split the material below into {{count}} programming flashcards.\nFields per card:\n- api: the full name of the function, method or API\n- lang: the language, one of JavaScript/TypeScript/Python/Java/Kotlin/Go/Rust/SQL/Bash/Other\n- signature: the call signature, with parameter names and optionality made clear; use an empty string if it takes no parameters\n- returns: what it returns, may be empty\n- example: a minimal piece of example code that runs\n- pitfall: common traps, may be empty\n- since: the major version that introduced it (a number, e.g. 2015); if you are unsure use an empty string and set mutates to false\n- mutates: whether it modifies the original object, true or false\nOutput JSON only, in the form: {\"cards\":[{\"api\":\"...\",\"lang\":\"JavaScript\",\"signature\":\"...\",\"returns\":\"...\",\"example\":\"...\",\"pitfall\":\"...\",\"since\":2015,\"mutates\":false}]}\n\nMaterial:\n{{text}}"
+      }
+    }
+  }
+}

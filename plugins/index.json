@@ -1,0 +1,80 @@
+{
+  "note": "内置示例插件清单。App 的「插件」页会读这个文件，让你一键安装。新增示例时只要把 json 放进本目录并在这里加一行。",
+  "examples": [
+    {
+      "file": "04-choice.json",
+      "name": "选择题",
+      "icon": "🅰️",
+      "tags": "单选 · 多选",
+      "desc": "正面只给题干和选项，背面自动高亮正确项并给出解析。选项一行一个，正确的那行用 * 开头。",
+      "id": "example.choice",
+      "i18n": {
+        "en": {
+          "name": "Multiple choice",
+          "tags": "Single / multi answer",
+          "desc": "The front shows only the question and the options; the back automatically highlights the correct option and shows the explanation. One option per line — the correct line starts with *."
+        }
+      }
+    },
+    {
+      "file": "01-vocab.json",
+      "name": "英语单词",
+      "icon": "🔤",
+      "tags": "外语",
+      "desc": "音标、词性、释义、例句与词根一起记。AI 能一次生成一整套字段。",
+      "id": "example.vocab",
+      "i18n": {
+        "en": {
+          "name": "English vocabulary",
+          "tags": "Foreign language",
+          "desc": "Phonetic, part of speech, meaning, example and roots all in one card. AI can generate the whole set at once."
+        }
+      }
+    },
+    {
+      "file": "02-law-cloze.json",
+      "name": "法条挖空",
+      "icon": "⚖️",
+      "tags": "挖空",
+      "desc": "把要件、数额、期限挖出来背。AI 只挖关键处，其余原文逐字保留。",
+      "id": "example.lawcloze",
+      "i18n": {
+        "en": {
+          "name": "Statute cloze",
+          "tags": "Cloze",
+          "desc": "Cloze out the elements, amounts and deadlines you must memorise. AI blanks only the key parts and keeps the rest of the text verbatim."
+        }
+      }
+    },
+    {
+      "file": "03-code.json",
+      "name": "代码 / API 记忆",
+      "icon": "💻",
+      "tags": "编程",
+      "desc": "签名、返回值、示例、易错点。适合背 API 和语法细节。",
+      "id": "example.code",
+      "i18n": {
+        "en": {
+          "name": "Code / API memory",
+          "tags": "Programming",
+          "desc": "Signature, return value, example, pitfalls. Great for memorising APIs and syntax details."
+        }
+      }
+    },
+    {
+      "file": "99-starter-template.json",
+      "name": "空白模板（自己改）",
+      "icon": "🧩",
+      "tags": "起点",
+      "desc": "最小的可用骨架，装完点「查看/编辑 JSON」照着写自己的卡型。",
+      "id": "my.firstplugin",
+      "i18n": {
+        "en": {
+          "name": "Blank template (edit it yourself)",
+          "tags": "Starting point",
+          "desc": "The smallest working skeleton. After installing it, tap \"View / edit JSON\" and write your own card type from there."
+        }
+      }
+    }
+  ]
+}

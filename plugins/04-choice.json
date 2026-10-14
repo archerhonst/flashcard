@@ -1,0 +1,84 @@
+{
+  "id": "example.choice",
+  "name": "选择题",
+  "icon": "🅰️",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "mode": "template",
+  "description": "单选 / 多选题卡：正面只有题干和选项，背面自动把正确选项高亮打勾，并给出解析。选项一行一个，正确的那一行用 * 开头。",
+  "fields": [
+    {
+      "key": "q",
+      "label": "题干",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "把题目完整抄下来（题干里不要出现答案）"
+    },
+    {
+      "key": "options",
+      "label": "选项（一行一个）",
+      "type": "textarea",
+      "placeholder": "巴黎\n*伦敦\n柏林\n罗马",
+      "hint": "正确选项的那一行用 * 开头。不用自己写 A/B/C/D —— 会自动编号；写了也会被剥掉，不会叠字。"
+    },
+    {
+      "key": "explain",
+      "label": "解析",
+      "type": "textarea",
+      "placeholder": "正确项为什么对；最容易选错的那个为什么不对"
+    },
+    {
+      "key": "keypoint",
+      "label": "一句话考点",
+      "type": "text",
+      "placeholder": "例：英国首都是伦敦，不是最大城市"
+    },
+    {
+      "key": "source",
+      "label": "出处",
+      "type": "text",
+      "placeholder": "章节名 / 教材页码"
+    }
+  ],
+  "templates": {
+    "front": "<div class=\"mcq-q\">{{{q}}}</div>\n{{{options|mcq}}}",
+    "back": "<div class=\"mcq-q\">{{{q}}}</div>\n{{{options|mcq:back}}}{{#keypoint}}<div class=\"mcq-kp\">💡 <b>考点</b>{{{keypoint}}}</div>{{/keypoint}}{{#explain}}<div class=\"mcq-ex\"><b>解析</b>{{{explain}}}</div>{{/explain}}{{#source}}<div class=\"mcq-src\">📚 {{source}}</div>{{/source}}"
+  },
+  "css": ".mcq-q { font-weight: 600; line-height: 1.8; white-space: pre-wrap; margin-bottom: 12px; }\n.mcq-opts { display: flex; flex-direction: column; gap: 7px; }\n.mcq-opt { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); line-height: 1.65; }\n.mcq-k { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; border-radius: 50%; background: var(--bg-3); color: var(--fg-2); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }\n.mcq-t { flex: 1 1 auto; white-space: pre-wrap; }\n.mcq-opt.is-right { border-color: var(--green); background: rgba(34, 197, 94, .12); }\n.mcq-opt.is-right .mcq-k { background: var(--green); color: #fff; }\n.mcq-mark { flex: 0 0 auto; color: var(--green); font-weight: 700; }\n.mcq-answer { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); color: var(--green); }\n.mcq-kp { margin-top: 14px; padding: 9px 12px; border-radius: 10px; background: var(--bg-3); line-height: 1.7; white-space: pre-wrap; }\n.mcq-kp b { margin-right: 8px; color: var(--amber); }\n.mcq-ex { margin-top: 10px; line-height: 1.8; white-space: pre-wrap; }\n.mcq-ex b { display: block; margin-bottom: 4px; color: var(--fg-2); font-size: 13px; }\n.mcq-src { margin-top: 10px; color: var(--fg-3); font-size: 12px; }\n.fc-card .mcq-opt { border-radius: 8px; }",
+  "ai": {
+    "kind": "cards",
+    "prompt": "你是出题老师。把下面的材料做成 {{count}} 道选择题。只输出 JSON，不要任何解释文字：\n\n{\"cards\":[{\"q\":\"题干\",\"options\":\"选项1\\n*正确选项\\n选项3\\n选项4\",\"explain\":\"正确项为什么对、最容易选错的那个为什么不对\",\"keypoint\":\"一句话考点\",\"source\":\"材料里的出处\"}]}\n\n硬性规则：\n1. options 是纯文本，一行一个选项，共 4 个（材料实在不够就 3 个）。不要写 A/B/C/D 前缀。\n2. 正确选项那一行的行首必须加一个星号 *，整套题里只能有一个正确项。\n3. 干扰项要似是而非：用同一段落里的相近概念、数字、主体或顺序去编，不要写一眼就排除的荒唐选项。\n4. explain 要同时说清「为什么对」和「最容易选错的那个为什么不对」。\n5. 题干必须能独立读懂，并且不能把答案写在题干里。\n6. source 填材料中的定位（章节号或小标题）；找不到就填空字符串。\n\n材料：\n{{text}}"
+  },
+  "i18n": {
+    "en": {
+      "name": "Multiple choice",
+      "description": "Single / multi-answer quiz card: the front shows only the question and the options, the back automatically ticks and highlights the correct option and adds the explanation. One option per line — the correct line starts with *.",
+      "fields": {
+        "q": {
+          "label": "Question",
+          "placeholder": "Copy the question in full (do not put the answer in the question)"
+        },
+        "options": {
+          "label": "Options (one per line)",
+          "placeholder": "Paris\n*London\nBerlin\nRome",
+          "hint": "The line of the correct option starts with *. You do not need to write A/B/C/D — numbering is automatic, and anything you do write is stripped so it never doubles up."
+        },
+        "explain": {
+          "label": "Explanation",
+          "placeholder": "Why the correct option is right; why the most tempting wrong one is not"
+        },
+        "keypoint": {
+          "label": "One-line takeaway",
+          "placeholder": "e.g. The UK capital is London, not its largest city"
+        },
+        "source": {
+          "label": "Source",
+          "placeholder": "Chapter name / textbook page"
+        }
+      },
+      "ai": {
+        "prompt": "You are a quiz author. Turn the material below into {{count}} multiple-choice questions. Output JSON only, with no explanatory text at all:\n\n{\"cards\":[{\"q\":\"question\",\"options\":\"option 1\\n*correct option\\noption 3\\noption 4\",\"explain\":\"why the correct option is right and why the most tempting wrong one is not\",\"keypoint\":\"one-line takeaway\",\"source\":\"where it sits in the material\"}]}\n\nHard rules:\n1. options is plain text, one option per line, 4 in total (3 if the material really is too thin). Do not write A/B/C/D prefixes.\n2. The line of the correct option must begin with a single asterisk *; there can be only one correct option per question.\n3. Distractors must be plausible: build them from nearby concepts, numbers, subjects or orderings in the same passage. Never write absurd options that give themselves away.\n4. explain must state both \"why it is right\" and \"why the most tempting wrong option is not\".\n5. The question must be understandable on its own, and must not contain the answer.\n6. source holds the locator inside the material (section number or subheading); use an empty string if you cannot find one.\n\nMaterial:\n{{text}}"
+      }
+    }
+  }
+}

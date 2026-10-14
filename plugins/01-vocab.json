@@ -1,0 +1,108 @@
+{
+  "id": "example.vocab",
+  "name": "英语单词",
+  "icon": "🔤",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "示例插件：单词 + 音标 + 词性 + 例句。演示 select / list 字段与过滤器用法。",
+  "mode": "template",
+  "fields": [
+    {
+      "key": "word",
+      "label": "单词",
+      "type": "text",
+      "required": true,
+      "placeholder": "例如：ephemeral"
+    },
+    {
+      "key": "phonetic",
+      "label": "音标",
+      "type": "text",
+      "placeholder": "例如：/ɪˈfem(ə)rəl/"
+    },
+    {
+      "key": "pos",
+      "label": "词性",
+      "type": "select",
+      "options": [
+        "n.",
+        "v.",
+        "adj.",
+        "adv.",
+        "prep.",
+        "conj.",
+        "phr."
+      ],
+      "default": "adj."
+    },
+    {
+      "key": "meaning",
+      "label": "中文释义",
+      "type": "textarea",
+      "required": true
+    },
+    {
+      "key": "example",
+      "label": "例句",
+      "type": "textarea",
+      "placeholder": "可留空"
+    },
+    {
+      "key": "exampleCn",
+      "label": "例句翻译",
+      "type": "textarea"
+    },
+    {
+      "key": "roots",
+      "label": "词根联想",
+      "type": "list",
+      "hint": "每行一个，正面会作为线索显示",
+      "default": []
+    }
+  ],
+  "templates": {
+    "front": "<div class=\"vb-word\">{{word}}</div>{{#phonetic}}<div class=\"vb-phon\">{{phonetic}}</div>{{/phonetic}}{{#roots}}<div class=\"vb-root\">🧩 {{.}}</div>{{/roots}}",
+    "back": "<div class=\"vb-word\">{{word}}</div>{{#phonetic}}<div class=\"vb-phon\">{{phonetic}}</div>{{/phonetic}}<div class=\"vb-mean\"><span class=\"vb-pos\">{{pos}}</span> {{{meaning}}}</div>{{#example}}<hr class=\"fc-hr\"><div class=\"vb-eg\">{{example}}</div>{{#exampleCn}}<div class=\"vb-egcn\">{{exampleCn}}</div>{{/exampleCn}}{{/example}}{{#roots}}<div class=\"vb-root\">🧩 {{.}}</div>{{/roots}}"
+  },
+  "css": ".vb-word{font-size:1.5em;font-weight:700;letter-spacing:.01em}.vb-phon{opacity:.65;font-family:monospace;margin-top:.2em}.vb-pos{display:inline-block;background:rgba(59,130,246,.15);color:#60a5fa;border-radius:.4em;padding:.05em .45em;margin-right:.4em;font-size:.8em}.vb-mean{margin-top:.8em;font-size:1.05em;line-height:1.7}.vb-eg{color:#94a3b8;font-style:italic}.vb-egcn{color:#64748b;font-size:.9em;margin-top:.3em}.vb-root{opacity:.6;font-size:.88em;margin-top:.5em}",
+  "ai": {
+    "kind": "cards",
+    "prompt": "把下面的材料拆成 {{count}} 张英语单词闪卡。\n要求：\n1. 每张卡包含 word（单词）、phonetic（IPA 音标，用 / / 包裹）、pos（词性，只能取 n./v./adj./adv./prep./conj./phr.）、meaning（中文释义）、example（英文例句）、exampleCn（例句中文翻译）、roots（词根或联想记忆，字符串数组，可空）\n2. 音标拿不准就留空字符串，不要编造\n只输出 JSON，格式：{\"cards\":[{\"word\":\"...\",\"phonetic\":\"...\",\"pos\":\"adj.\",\"meaning\":\"...\",\"example\":\"...\",\"exampleCn\":\"...\",\"roots\":[\"...\"]}]}\n\n材料：\n{{text}}"
+  },
+  "i18n": {
+    "en": {
+      "name": "English vocabulary",
+      "description": "Example plugin: word + phonetic + part of speech + example. Demonstrates the select / list field types and how filters work.",
+      "fields": {
+        "word": {
+          "label": "Word",
+          "placeholder": "e.g. ephemeral"
+        },
+        "phonetic": {
+          "label": "Phonetic",
+          "placeholder": "e.g. /ɪˈfem(ə)rəl/"
+        },
+        "pos": {
+          "label": "Part of speech"
+        },
+        "meaning": {
+          "label": "Meaning"
+        },
+        "example": {
+          "label": "Example sentence",
+          "placeholder": "Can be left empty"
+        },
+        "exampleCn": {
+          "label": "Example translation"
+        },
+        "roots": {
+          "label": "Roots / mnemonics",
+          "hint": "One per line; shown on the front as a clue"
+        }
+      },
+      "ai": {
+        "prompt": "Split the material below into {{count}} English vocabulary flashcards.\nRequirements:\n1. Each card carries word, phonetic (IPA wrapped in / /), pos (part of speech, one of n./v./adj./adv./prep./conj./phr.), meaning, example (an English example sentence), exampleCn (Chinese translation of the example), roots (root or mnemonic, an array of strings, may be empty)\n2. If you are not sure of the phonetic, leave it an empty string — never make one up\nOutput JSON only, in the form: {\"cards\":[{\"word\":\"...\",\"phonetic\":\"...\",\"pos\":\"adj.\",\"meaning\":\"...\",\"example\":\"...\",\"exampleCn\":\"...\",\"roots\":[\"...\"]}]}\n\nMaterial:\n{{text}}"
+      }
+    }
+  }
+}
