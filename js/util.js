@@ -152,31 +152,26 @@
   }
 
   /* ---------------- 文件 ---------------- */
-  /* 把文件交给原生侧保存，按可用性依次尝试三条通道：
+  /* 保存文件的两条通道，按可靠性排序：
    *
-   *   1. FlashCardsNative.saveFileBase64 —— 本仓库 android/ 那套壳（能写二进制）
-   *   2. Android.downloadFileFromBase64  —— HopWeb 打包器的壳（能写二进制）
-   *   3. FlashCardsNative.saveFile       —— 老壳，只吃文本
+   *   1. FlashCardsNative.saveFileBase64 / saveFile —— 本仓库 android/ 那套壳。
+   *      落点与权限由壳自己处理，是唯一「我们能保证」的通道。
+   *   2. 标准下载（blob: + <a download>）—— 浏览器里一定可用；WebView 里只有装了
+   *      DownloadListener 的壳才会把它转交系统下载器。系统下载器写「下载」目录
+   *      **不需要应用持有存储权限**，是 Android 10+ 上唯一能落盘的正路。
    *
-   * 为什么非要走桥：Android WebView **不支持** blob: + <a download>，
-   * 页面里点「导出」会安静地什么都不发生。这就是以前导出「用不了」的原因。
-   * 浏览器 / PWA 里没有这些桥，自动回落到标准下载。 */
+   * 为什么不再调 HopWeb 那套壳的 Android.downloadFileFromBase64：
+   *   它的 AndroidManifest 里只有 INTERNET / VIBRATE，**没有任何存储权限**，
+   *   却拿 File API 往 /storage/emulated/0/Download 直接写文件 —— 在 Android 10+
+   *   上这个写操作注定失败；用户实测还会在它的 Base64 解码处抛
+   *   「NullPointerException: decode(data) must not be null」把整个应用打崩。
+   *   崩溃比「点了没反应」严重得多，所以这条通道直接去掉。
+   *   需要纯文本搬运时用 copyText()，那条路不需要任何权限。 */
   function nativeSaveBase64(filename, b64, mime) {
     var N = global.FlashCardsNative;
     if (N && typeof N.saveFileBase64 === 'function') {
       try { if (N.saveFileBase64(filename, b64, mime || 'application/octet-stream') !== false) return true; }
-      catch (e) { /* 换下一条通道 */ }
-    }
-    var A = global.Android;
-    if (A && typeof A.downloadFileFromBase64 === 'function') {
-      try {
-        /* HopWeb 那套壳的签名只有 base64，文件名得用户在它自己弹的窗里填，
-         * 而且输入框是空的、只给了一句提示语。所以先把建议名念一遍，
-         * 否则用户对着空框不知道该写什么、很容易把 .zip 后缀漏掉。 */
-        toast(T('请在弹出的窗口里把文件名填成：{n}', { n: filename }), 'ok');
-        A.downloadFileFromBase64(b64);
-        return true;
-      } catch (e) { /* 换下一条通道 */ }
+      catch (e) { /* 桥调用失败则回落 */ }
     }
     return false;
   }

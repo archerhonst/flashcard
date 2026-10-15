@@ -190,10 +190,18 @@ flashcards-backup-2026-10-15.zip
 卡片换新 id；成长数据在合并时**经验取两边较大值、徽章取并集**，从不把等级改低。
 老的 `.json` 备份也照样能导入（先导入的一律按旧格式解析）。
 
-> **在装好的 APK 里导出时**，系统会再弹一个小窗让你确认文件名（打包器的壳
-> 只收文件内容，收不了文件名，所以这个名字得由你填）。App 会先把建议名念给你
-> ——照着填、**别把 `.zip` 后缀漏掉**。文件保存在手机的「下载 / Download」文件夹。
-> 浏览器里打开则走标准的「另存为」，不需要这一步。
+> **没地方存文件时用「复制备份文本」。** 部署方式不同，「导出备份」的去向也不同：
+> - 用本仓库 `android/` 自己打的 APK：Android 10+ 走 MediaStore 直接落进「下载」，
+>   Android 9 及以下会先申请一次存储权限（见 `android/README-打包.md`）。
+> - 在浏览器里打开：标准「另存为」。
+> - 用第三方打包器（如 HopWeb）套的壳：它的 `AndroidManifest.xml` 里
+>   **一条存储权限都没有**，却拿 `File` API 直接往 `/storage/emulated/0/Download` 写，
+>   在 Android 10+ 上必然失败（用户实测还会在它的 `Base64.decode` 处抛
+>   `NullPointerException: decode(data) must not be null` 把应用打崩）。
+>   这条原生通道已经从 `js/util.js` 里去掉——**点了没反应也好过闪退**。
+>   需要落盘时改用「设置 → 复制备份文本」：它把同一只 zip 转成一段 base64 文本
+>   放进剪贴板，粘到记事本 / 聊天窗口里保存即可，换设备时用「从文本导入」贴回来。
+>   这条路不碰文件系统，任何 WebView 都一定能用。
 
 ### 成长体系
 
@@ -388,8 +396,11 @@ html[data-theme] { --fc-hm: 18px; --fc-gm-xp: var(--green); }
   （`https://appassets.androidplatform.net/assets/www/index.html`），
   这样 `localStorage` 有稳定的 origin（用 `file://` 的话某些机型上 `localStorage` 不可用 / 不持久）
 - **导出文件**：WebView 不支持 `blob:` + `<a download>`，所以走一段 JS 桥
-  （`FlashCardsNative.saveFile`）写进系统「下载」目录。Android 10+ 用 MediaStore（免权限），
-  9 及以下写公共目录（先申请 `WRITE_EXTERNAL_STORAGE`）；桥不可用时网页自动回落到标准 blob 下载
+  （`FlashCardsNative.saveFileBase64`）写进系统「下载」目录。Android 10+ 用 MediaStore（免权限），
+  9 及以下写公共目录（先申请 `WRITE_EXTERNAL_STORAGE`）；桥不可用时网页自动回落到标准 blob 下载。
+  **只认这一个桥**：第三方打包器（HopWeb 等）那个 `Android.downloadFileFromBase64` 不再被调用，
+  因为它的壳没有声明任何存储权限、写不进公共目录，还会在自己的 base64 解码处抛空指针闪退
+  （`js/util.js` 里 `nativeSaveBase64` 的注释留了完整来由）。落不了盘时用「复制备份文本」绕过文件系统
 - 返回键先回退网页历史，再退出
 - 文件选择（导入插件 / 恢复备份）通过 `onShowFileChooser` 打通系统文件选择器
 - 切后台 / 退出前主动调用 `WebView.onPause()`，逼 Chromium 把 `localStorage` 提交落盘，

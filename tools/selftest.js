@@ -1339,9 +1339,15 @@ async function checkBundle() {
   }
 
   /* 保存文件这条链最容易「静默失败」：WebView 不支持 blob: 下载，
-   * 全指望原生桥。所以三条通道的优先级、参数形态、失败后是否继续往下试，
-   * 都得钉死。 */
-  group('保存文件：三条原生通道');
+   * 全指望原生桥。所以通道的优先级、参数形态、失败后是否继续往下试，
+   * 都得钉死。
+   *
+   * 特别注意：HopWeb 那套壳（com.venter.shellapp）的 Android.downloadFileFromBase64
+   * 有两条硬伤——它的清单里一条存储权限都没声明，写 /storage/emulated/0/Download
+   * 在 Android 10+ 上注定失败；而且它把数据交给同一个 APK 里的 Base64.decode 去解，
+   * 解不出来就 checkNotNull 崩在 MainActivity.kt:823。所以这条路被拿掉了，
+   * 下面①专门盯着它别再被加回来。 */
+  group('保存文件：原生通道');
   {
     const box = documentStub.createElement();            // 冒充 #toast
     const realGet = documentStub.getElementById;
@@ -1353,38 +1359,32 @@ async function checkBundle() {
       const b64 = Buffer.from(payload).toString('base64');
       const hex = Buffer.from(payload).toString('hex');
 
-      // ① HopWeb 打包器的壳：签名只有 base64，文件名要用户在它自己的弹窗里填
+      // ① HopWeb 壳的桥：不许再用（会崩、也没有存储权限）
       const seen = [];
       ctx.Android = { downloadFileFromBase64(b) { seen.push(b); } };
       ctx.FlashCardsNative = undefined;
-      ok('HopWeb 壳下会走原生通道',
-        U.downloadBytes('flashcards-backup-2026-10-15.zip', payload, 'application/zip') === true);
-      eq('只调了一次桥', seen.length, 1);
-      eq('交给桥的是纯 base64（不带 data: 前缀）', seen[0], b64);
-      eq('桥收到的字节能原样解回来', Buffer.from(seen[0], 'base64').toString('hex'), hex);
-      const said = [].concat(box.children).map((c) => String(c.innerHTML)).join(' | ');
-      ok('先把建议的文件名念了一遍（弹窗里那个输入框是空的）',
-        said.indexOf('flashcards-backup-2026-10-15.zip') >= 0, said);
-      eq('提示里没有漏替换的占位符', /\{\w+\}/.test(said), false);
+      ok('HopWeb 的 Android 桥不再被调用',
+        U.downloadBytes('flashcards-backup-2026-10-15.zip', payload, 'application/zip') === false);
+      eq('一次都没调它', seen.length, 0);
+      ctx.Android = undefined;
 
       // ② 本仓库 android/ 那套壳：能吃文件名与 mime
       const calls = [];
-      ctx.Android = undefined;
       ctx.FlashCardsNative = { saveFileBase64(n, b, m) { calls.push([n, b, m]); return true; } };
-      ok('FlashCardsNative 壳下也走原生通道',
+      ok('FlashCardsNative 壳下走原生通道',
         U.downloadBytes('a.zip', payload, 'application/zip') === true);
+      eq('只调了一次桥', calls.length, 1);
       eq('文件名与 mime 原样传下去', calls[0], ['a.zip', b64, 'application/zip']);
+      eq('交给桥的是纯 base64（不带 data: 前缀）', calls[0][1], b64);
+      eq('桥收到的字节能原样解回来', Buffer.from(calls[0][1], 'base64').toString('hex'), hex);
 
-      // ③ 第一条通道说失败时，必须接着试下一条
-      const seen2 = [];
+      // ③ 桥说失败时，必须接着试标准下载（而不是谎报成功）
       ctx.FlashCardsNative = { saveFileBase64() { return false; } };
-      ctx.Android = { downloadFileFromBase64(b) { seen2.push(b); } };
-      ok('第一条通道失败后仍走通了第二条', U.downloadBytes('b.zip', payload) === true);
-      eq('第二条通道确实被调到', seen2.length, 1);
+      ok('桥失败后返回 false，交给标准下载兜底',
+        U.downloadBytes('b.zip', payload) === false);
 
       // ④ 桥都没有（浏览器里）：不许假装保存成功
       ctx.FlashCardsNative = undefined;
-      ctx.Android = undefined;
       ok('没有原生桥时返回 false，交给标准下载兜底',
         U.downloadBytes('c.zip', payload) === false);
 
@@ -1399,6 +1399,32 @@ async function checkBundle() {
       ctx.Android = undefined;
       ctx.FlashCardsNative = undefined;
     }
+  }
+
+  /* 文本搬运是对「壳写不了磁盘」的兜底：这条路必须能自洽地往返，
+   * 而且用户从聊天软件粘回来的文本会带换行和空格，必须照样解得开。 */
+  group('备份文本：base64 往返');
+  {
+    const entriesIn = [
+      { name: 'decks.json', data: '[{"id":"d1","name":"甲"}]' },
+      { name: 'cards.json', data: '[]' }
+    ];
+    const bytes = ctx.Zip.write(entriesIn);
+    const text = ctx.Zip.base64(bytes);
+    ok('文本只含 base64 字符', /^[A-Za-z0-9+/]*={0,2}$/.test(text), text.slice(0, 40));
+
+    const back = ctx.Zip.unbase64(text);
+    eq('往返后字节完全一致', Buffer.from(back).toString('hex'), Buffer.from(bytes).toString('hex'));
+    const entries = await ctx.Zip.read(back);
+    eq('解回来还是个能读的 zip', entries.length, 2);
+    eq('文件内容没变', ctx.Zip.text(entries[0].bytes), '[{"id":"d1","name":"甲"}]');
+
+    // 用户从微信/记事本粘回来时，文本会被折行、带前导空格
+    const wrapped = text.replace(/(.{40})/g, '$1\n ');
+    const back2 = ctx.Zip.unbase64(wrapped);
+    eq('折行加空格的版本照样解得开', Buffer.from(back2).toString('hex'), Buffer.from(bytes).toString('hex'));
+
+    eq('空文本解出空数组，不抛异常', ctx.Zip.unbase64('  \n ').length, 0);
   }
 }
 

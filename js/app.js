@@ -1563,9 +1563,12 @@
       '<div class="row row--wrap" style="gap:8px">' +
       T('<button class="btn btn--sm" data-act="data:export">导出备份 (.zip)</button>') +
       T('<button class="btn btn--sm" data-act="data:import">导入备份 (.zip)</button>') +
+      T('<button class="btn btn--sm" data-act="data:exportText">复制备份文本</button>') +
+      T('<button class="btn btn--sm" data-act="data:importText">从文本导入</button>') +
       T('<button class="btn btn--sm btn--danger" data-act="data:clear">清空所有数据</button>') +
       '</div>' +
       T('<div class="muted" style="margin-top:10px">备份是一个普通的 .zip，里面有牌组与卡片、成长数据、设置、自定义 CSS 和已安装的插件——单拎出其中任何一个文件改完再打回去也是合法备份。</div>') +
+      T('<div class="muted" style="margin-top:6px">「复制备份文本」把同一个 zip 转成一段文本放进剪贴板：不用文件、不用存储权限，在微信/记事本里存好，换手机时「从文本导入」粘回来就能还原。</div>') +
       T('<div class="muted" style="margin-top:6px">数据保存在本机 localStorage，卸载 App 或清理数据会丢失，建议定期导出备份。</div>') +
       '</div>';
 
@@ -1800,6 +1803,8 @@
       /* ---- 数据 ---- */
       case 'data:export': exportBundleFlow(); break;
       case 'data:import': importBackupFlow(); break;
+      case 'data:exportText': exportTextFlow(); break;
+      case 'data:importText': importTextFlow(); break;
       case 'csv:export': csvExportFlow(); break;
       case 'csv:import': csvImportFlow(); break;
 
@@ -2638,13 +2643,10 @@
   }
 
   function exportBundleFlow() {
-    var files, bytes;
-    try { files = DB.exportBundle(); }
-    catch (e) { U.toast(T('导出失败：') + e.message, 'error'); return; }
-    try { bytes = Zip.write(files); }
-    catch (e) { U.toast(T('打包失败：') + e.message, 'error'); return; }
-    U.downloadBytes(bundleFileName(), bytes, 'application/zip');
-    U.toast(T('已导出备份（{n} 个文件）', { n: files.length }), 'ok');
+    var b = bundleBytesOrToast();
+    if (!b) return;
+    U.downloadBytes(bundleFileName(), b.bytes, 'application/zip');
+    U.toast(T('已导出备份（{n} 个文件）', { n: b.files.length }), 'ok');
   }
 
   function bundleSummary(m) {
@@ -2728,6 +2730,71 @@
           });
         }
       } catch (e) { U.toast(T('导入失败：') + e.message, 'error'); }
+    });
+  }
+
+  /* ---- 纯文本搬运：不碰文件系统，也就不需要任何存储权限 ----
+   * 为什么要有这条路：在 WebView 里「下载文件」要么被 blob: 吞掉、要么
+   * 落到壳自己去写 /storage/emulated/0/Download（壳没声明任何存储权限，
+   * 在 Android 10+ 上注定失败）。而「把一段文本放进剪贴板」是任何
+   * WebView 都一定做得到的事，所以导出/导入都留了这条兜底通道。 */
+  function bundleBytesOrToast() {
+    var files, bytes;
+    try { files = DB.exportBundle(); }
+    catch (e) { U.toast(T('导出失败：') + e.message, 'error'); return null; }
+    try { bytes = Zip.write(files); }
+    catch (e) { U.toast(T('打包失败：') + e.message, 'error'); return null; }
+    return { files: files, bytes: bytes };
+  }
+
+  function exportTextFlow() {
+    var b = bundleBytesOrToast();
+    if (!b) return;
+    var text = Zip.base64(b.bytes);
+    var kb = Math.max(1, Math.round(text.length / 1024));
+    var body = T('<div class="muted" style="margin-bottom:8px">下面这段文本就是你的全部备份（') +
+      b.files.length + T(' 个文件，约 ') + kb + T(' KB）。整段复制走，存进记事本、发给自己、丢进网盘都行；换手机时用「从文本导入」粘回来即可。</div>') +
+      '<textarea id="bk-text" class="mono" readonly rows="10" spellcheck="false" ' +
+      'style="width:100%;font-size:12px">' + esc(text) + '</textarea>';
+    var actions = T('<button class="btn btn--ghost" data-act="m:close">关闭</button>') +
+      T('<button class="btn btn--primary" data-act="bk:copy">复制这段文本</button>');
+    var modal = openModal(T('备份文本'), body, actions);
+    modal.addEventListener('click', function (e) {
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if (act === 'm:close') return closeModal(modal);
+      if (act !== 'bk:copy') return;
+      var ta = $('#bk-text', modal);
+      if (ta) { ta.focus(); ta.select(); }
+      U.copyText(text).then(function (ok) {
+        U.toast(ok ? T('已复制到剪贴板') : T('复制失败，请长按上面的文本手动全选复制'), ok ? 'ok' : 'error');
+      });
+    });
+  }
+
+  function importTextFlow() {
+    var body = T('<div class="muted" style="margin-bottom:8px">把「复制备份文本」得到的那一整段粘进来（换行、空格都会被忽略）。</div>') +
+      '<textarea id="bk-in" class="mono" rows="10" spellcheck="false" ' +
+      'style="width:100%;font-size:12px" placeholder="' + esc(T('在这里粘贴备份文本…')) + '"></textarea>';
+    var actions = T('<button class="btn btn--ghost" data-act="m:close">取消</button>') +
+      T('<button class="btn btn--primary" data-act="bk:load">导入</button>');
+    var modal = openModal(T('从文本导入'), body, actions);
+    modal.addEventListener('click', function (e) {
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if (act === 'm:close') return closeModal(modal);
+      if (act !== 'bk:load') return;
+      var ta = $('#bk-in', modal);
+      var raw = ta ? String(ta.value || '').trim() : '';
+      if (!raw) { U.toast(T('还没有粘贴内容'), 'error'); return; }
+      var bytes;
+      try { bytes = Zip.unbase64(raw); }
+      catch (err) { U.toast(T('这段文本不是合法的备份：') + err.message, 'error'); return; }
+      // 认 zip 魔数，而不是靠用户说它是什么
+      if (!(bytes.length > 3 && bytes[0] === 0x50 && bytes[1] === 0x4b)) {
+        U.toast(T('这段文本解出来不是备份数据，可能没复制全'), 'error');
+        return;
+      }
+      closeModal(modal);
+      importBundleFile({ bytes: bytes });
     });
   }
 

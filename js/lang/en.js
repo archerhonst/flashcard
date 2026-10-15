@@ -398,10 +398,16 @@
       '<button class="btn btn--sm" data-act="data:export">Export backup (.zip)</button>',
     '<button class="btn btn--sm" data-act="data:import">导入备份 (.zip)</button>':
       '<button class="btn btn--sm" data-act="data:import">Import backup (.zip)</button>',
+    '<button class="btn btn--sm" data-act="data:exportText">复制备份文本</button>':
+      '<button class="btn btn--sm" data-act="data:exportText">Copy backup as text</button>',
+    '<button class="btn btn--sm" data-act="data:importText">从文本导入</button>':
+      '<button class="btn btn--sm" data-act="data:importText">Import from text</button>',
     '<button class="btn btn--sm btn--danger" data-act="data:clear">清空所有数据</button>':
       '<button class="btn btn--sm btn--danger" data-act="data:clear">Erase all data</button>',
     '<div class="muted" style="margin-top:10px">备份是一个普通的 .zip，里面有牌组与卡片、成长数据、设置、自定义 CSS 和已安装的插件——单拎出其中任何一个文件改完再打回去也是合法备份。</div>':
       '<div class="muted" style="margin-top:10px">A backup is an ordinary .zip holding your decks and cards, growth data, settings, custom CSS and installed plugins — pull any one file out, edit it, and zip it back up; it stays a valid backup.</div>',
+    '<div class="muted" style="margin-top:6px">「复制备份文本」把同一个 zip 转成一段文本放进剪贴板：不用文件、不用存储权限，在微信/记事本里存好，换手机时「从文本导入」粘回来就能还原。</div>':
+      '<div class="muted" style="margin-top:6px">“Copy backup as text” turns that same zip into a block of text on your clipboard: no files, no storage permission. Keep it in a note or a chat, then paste it into “Import from text” on your new phone.</div>',
     '<div class="muted" style="margin-top:6px">数据保存在本机 localStorage，卸载 App 或清理数据会丢失，建议定期导出备份。</div>':
       '<div class="muted" style="margin-top:6px">Data is stored in this device’s localStorage. Uninstalling the app or clearing its data wipes it — export a backup regularly.</div>',
     '<div class="card-panel"><div class="section-title">🛟 自动快照</div>':
@@ -452,7 +458,6 @@
     '自定义样式已应用': 'Custom CSS applied',
     '已清空自定义样式': 'Custom CSS cleared',
     '导出失败：': 'Export failed: ',
-    '请在弹出的窗口里把文件名填成：{n}': 'In the dialog that opens, name the file: {n}',
     '打包失败：': 'Could not build the zip: ',
     '已导出备份（{n} 个文件）': 'Backup exported ({n} files)',
     '读取 zip 失败：': 'Could not read the zip: ',
@@ -695,6 +700,27 @@
     '确认替换': 'Replace',
     '替换导入完成': 'Replace import finished',
     '导入失败：': 'Import failed: ',
+
+    /* ---- 纯文本搬运（不依赖文件系统） ---- */
+    '备份文本': 'Backup text',
+    '已复制到剪贴板': 'Copied to clipboard',
+    '复制失败，请长按上面的文本手动全选复制': 'Copy failed — long-press the text above and select all to copy it manually',
+    '从文本导入': 'Import from text',
+    '还没有粘贴内容': 'Nothing pasted yet',
+    '这段文本不是合法的备份：': 'This text is not a valid backup: ',
+    '这段文本解出来不是备份数据，可能没复制全': 'This text did not decode to backup data — it may be incomplete',
+    '在这里粘贴备份文本…': 'Paste the backup text here…',
+    ' 个文件，约 ': ' files, about ',
+    ' KB）。整段复制走，存进记事本、发给自己、丢进网盘都行；换手机时用「从文本导入」粘回来即可。</div>':
+      ' KB). Copy the whole block — a note, a message to yourself, cloud storage, anything; on your next phone, paste it into “Import from text”.</div>',
+    '<button class="btn btn--primary" data-act="bk:copy">复制这段文本</button>':
+      '<button class="btn btn--primary" data-act="bk:copy">Copy this text</button>',
+    '<button class="btn btn--primary" data-act="bk:load">导入</button>':
+      '<button class="btn btn--primary" data-act="bk:load">Import</button>',
+    '<div class="muted" style="margin-bottom:8px">下面这段文本就是你的全部备份（':
+      '<div class="muted" style="margin-bottom:8px">This block of text is your whole backup (',
+    '<div class="muted" style="margin-bottom:8px">把「复制备份文本」得到的那一整段粘进来（换行、空格都会被忽略）。</div>':
+      '<div class="muted" style="margin-bottom:8px">Paste the whole block you got from “Copy backup as text” (line breaks and spaces are ignored).</div>',
 
     /* ---------------- 首次启动的示例 ---------------- */
     '欢迎使用闪卡 👋': 'Welcome to FlashCards 👋',

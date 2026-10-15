@@ -79,6 +79,21 @@
     throw new Error('当前环境没有 base64 编码能力');
   }
 
+  /* base64 文本还原成字节。空白（含用户复制粘贴带进来的换行、空格）一律忽略，
+     所以粘贴用的文本可以被 UI 按任意宽度折行。 */
+  function unbase64(str) {
+    var s = String(str).replace(/\s+/g, '');
+    if (!s) return new Uint8Array(0);
+    if (typeof global.atob === 'function') {
+      var bin = global.atob(s);
+      var out = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    if (typeof Buffer !== 'undefined') return new Uint8Array(Buffer.from(s, 'base64'));
+    throw new Error('当前环境没有 base64 解码能力');
+  }
+
   /* ---------- 小端写 ---------- */
   function w16(a, v) { a.push(v & 0xff, (v >>> 8) & 0xff); }
   function w32(a, v) { a.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff); }
@@ -250,6 +265,7 @@
     crc32: crc32,
     utf8: utf8,
     text: text,
-    base64: base64
+    base64: base64,
+    unbase64: unbase64
   };
 })(typeof window !== 'undefined' ? window : globalThis);
