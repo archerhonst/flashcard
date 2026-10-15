@@ -1337,6 +1337,69 @@ async function checkBundle() {
     // 收尾
     ctx.Plugins.uninstall && (() => { try { ctx.Plugins.uninstall('x.bundle'); } catch (e) { } })();
   }
+
+  /* 保存文件这条链最容易「静默失败」：WebView 不支持 blob: 下载，
+   * 全指望原生桥。所以三条通道的优先级、参数形态、失败后是否继续往下试，
+   * 都得钉死。 */
+  group('保存文件：三条原生通道');
+  {
+    const box = documentStub.createElement();            // 冒充 #toast
+    const realGet = documentStub.getElementById;
+    const realURL = ctx.URL;
+    documentStub.getElementById = (id) => (id === 'toast' ? box : null);
+    ctx.URL = { createObjectURL: () => 'blob:stub', revokeObjectURL() {} };
+    try {
+      const payload = new Uint8Array([80, 75, 3, 4, 0, 1, 2, 255]);
+      const b64 = Buffer.from(payload).toString('base64');
+      const hex = Buffer.from(payload).toString('hex');
+
+      // ① HopWeb 打包器的壳：签名只有 base64，文件名要用户在它自己的弹窗里填
+      const seen = [];
+      ctx.Android = { downloadFileFromBase64(b) { seen.push(b); } };
+      ctx.FlashCardsNative = undefined;
+      ok('HopWeb 壳下会走原生通道',
+        U.downloadBytes('flashcards-backup-2026-10-15.zip', payload, 'application/zip') === true);
+      eq('只调了一次桥', seen.length, 1);
+      eq('交给桥的是纯 base64（不带 data: 前缀）', seen[0], b64);
+      eq('桥收到的字节能原样解回来', Buffer.from(seen[0], 'base64').toString('hex'), hex);
+      const said = [].concat(box.children).map((c) => String(c.innerHTML)).join(' | ');
+      ok('先把建议的文件名念了一遍（弹窗里那个输入框是空的）',
+        said.indexOf('flashcards-backup-2026-10-15.zip') >= 0, said);
+      eq('提示里没有漏替换的占位符', /\{\w+\}/.test(said), false);
+
+      // ② 本仓库 android/ 那套壳：能吃文件名与 mime
+      const calls = [];
+      ctx.Android = undefined;
+      ctx.FlashCardsNative = { saveFileBase64(n, b, m) { calls.push([n, b, m]); return true; } };
+      ok('FlashCardsNative 壳下也走原生通道',
+        U.downloadBytes('a.zip', payload, 'application/zip') === true);
+      eq('文件名与 mime 原样传下去', calls[0], ['a.zip', b64, 'application/zip']);
+
+      // ③ 第一条通道说失败时，必须接着试下一条
+      const seen2 = [];
+      ctx.FlashCardsNative = { saveFileBase64() { return false; } };
+      ctx.Android = { downloadFileFromBase64(b) { seen2.push(b); } };
+      ok('第一条通道失败后仍走通了第二条', U.downloadBytes('b.zip', payload) === true);
+      eq('第二条通道确实被调到', seen2.length, 1);
+
+      // ④ 桥都没有（浏览器里）：不许假装保存成功
+      ctx.FlashCardsNative = undefined;
+      ctx.Android = undefined;
+      ok('没有原生桥时返回 false，交给标准下载兜底',
+        U.downloadBytes('c.zip', payload) === false);
+
+      // ⑤ 只吃文本的老壳
+      const texts = [];
+      ctx.FlashCardsNative = { saveFile(n, t, m) { texts.push([n, t, m]); return true; } };
+      U.download('backup.json', '{"a":1}', 'application/json');
+      eq('文本导出走 saveFile', texts[0], ['backup.json', '{"a":1}', 'application/json']);
+    } finally {
+      documentStub.getElementById = realGet;
+      ctx.URL = realURL;
+      ctx.Android = undefined;
+      ctx.FlashCardsNative = undefined;
+    }
+  }
 }
 
 /* ---------------- 结果 ---------------- */

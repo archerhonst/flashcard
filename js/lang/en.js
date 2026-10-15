@@ -452,6 +452,7 @@
     '自定义样式已应用': 'Custom CSS applied',
     '已清空自定义样式': 'Custom CSS cleared',
     '导出失败：': 'Export failed: ',
+    '请在弹出的窗口里把文件名填成：{n}': 'In the dialog that opens, name the file: {n}',
     '打包失败：': 'Could not build the zip: ',
     '已导出备份（{n} 个文件）': 'Backup exported ({n} files)',
     '读取 zip 失败：': 'Could not read the zip: ',

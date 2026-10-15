@@ -169,8 +169,14 @@
     }
     var A = global.Android;
     if (A && typeof A.downloadFileFromBase64 === 'function') {
-      try { A.downloadFileFromBase64(b64); return true; }
-      catch (e) { /* 换下一条通道 */ }
+      try {
+        /* HopWeb 那套壳的签名只有 base64，文件名得用户在它自己弹的窗里填，
+         * 而且输入框是空的、只给了一句提示语。所以先把建议名念一遍，
+         * 否则用户对着空框不知道该写什么、很容易把 .zip 后缀漏掉。 */
+        toast(T('请在弹出的窗口里把文件名填成：{n}', { n: filename }), 'ok');
+        A.downloadFileFromBase64(b64);
+        return true;
+      } catch (e) { /* 换下一条通道 */ }
     }
     return false;
   }
