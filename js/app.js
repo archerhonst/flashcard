@@ -2755,10 +2755,14 @@
     var body = T('<div class="muted" style="margin-bottom:8px">下面这段文本就是你的全部备份（') +
       b.files.length + T(' 个文件，约 ') + kb + T(' KB）。整段复制走，存进记事本、发给自己、丢进网盘都行；换手机时用「从文本导入」粘回来即可。</div>') +
       '<textarea id="bk-text" class="mono" readonly rows="10" spellcheck="false" ' +
-      'style="width:100%;font-size:12px">' + esc(text) + '</textarea>';
+      'style="width:100%;font-size:12px"></textarea>';
     var actions = T('<button class="btn btn--ghost" data-act="m:close">关闭</button>') +
       T('<button class="btn btn--primary" data-act="bk:copy">复制这段文本</button>');
     var modal = openModal(T('备份文本'), body, actions);
+    // 用 value 而不是把它拼进 HTML：备份可以有几百 KB，走 innerHTML
+    // 既要转义一整遍、又会多养一份同尺寸的字符串。
+    var ta0 = $('#bk-text', modal);
+    if (ta0) ta0.value = text;
     modal.addEventListener('click', function (e) {
       var act = e.target.getAttribute && e.target.getAttribute('data-act');
       if (act === 'm:close') return closeModal(modal);
