@@ -17,6 +17,8 @@
   <img src="docs/01-choose-language.png" width="170" alt="进入前选择语言">
   <img src="docs/02-study-cloze.png" width="170" alt="挖空卡正面">
   <img src="docs/03-plugins.png" width="170" alt="JSON 插件系统">
+  <img src="docs/05-growth.png" width="170" alt="成长体系：等级、徽章、挑战、热力图">
+  <img src="docs/06-curve.png" width="170" alt="单张卡的遗忘曲线">
   <img src="docs/04-english.png" width="170" alt="English 界面">
 </p>
 
