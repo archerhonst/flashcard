@@ -400,3 +400,147 @@ html[data-theme="light"] .toast { background: rgba(30, 38, 50, .95); }
 .lg-native { font-weight: 600; }
 .lg-en { font-size: .72rem; color: var(--fg-3); }
 .lg-foot { margin-top: 26px; font-size: .72rem; color: var(--fg-3); line-height: 1.8; }
+
+/* ============================================================
+ * 成长体系（game.js + app.js 的成长视图）
+ *
+ * 整块都走 CSS 变量，方便在「设置 → 外观 → 自定义 CSS」里换皮：
+ *   --fc-hm         学习日历格子边长（默认 9px）
+ *   --fc-hm-gap     格子间距
+ *   --fc-gm-xp      经验条的填充（默认蓝→紫渐变）
+ *   --fc-gm-badge   已解锁徽章的底色
+ * 例：把热力图放大一倍：html[data-theme] { --fc-hm: 18px; }
+ * ============================================================ */
+:root {
+  --fc-hm: 9px;
+  --fc-hm-gap: 2px;
+  --fc-gm-xp: linear-gradient(90deg, var(--primary), var(--purple));
+  --fc-gm-badge: var(--bg-3);
+}
+
+.fc-gm { display: flex; flex-direction: column; gap: 12px; }
+
+/* ---- 角色面板 ---- */
+.fc-gm-hero { display: flex; align-items: center; gap: 14px; }
+.fc-gm-avatar { font-size: 2.3rem; line-height: 1; flex: 0 0 auto; }
+.fc-gm-hero-main { flex: 1 1 auto; min-width: 0; }
+.fc-gm-hero-top { display: flex; align-items: baseline; gap: 8px; }
+.fc-gm-title { font-size: 1.08rem; }
+.fc-gm-level {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: .72rem; font-weight: 700; color: var(--primary);
+  background: rgba(59, 130, 246, .14); border: 1px solid var(--primary);
+  border-radius: 999px; padding: 2px 9px;
+}
+.fc-gm-xpbar { height: 8px; border-radius: 999px; background: var(--bg-3); overflow: hidden; margin: 8px 0 5px; }
+.fc-gm-xpbar > i { display: block; height: 100%; background: var(--fc-gm-xp); border-radius: 999px; transition: width .35s; }
+.fc-gm-xp-text { font-size: .72rem; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.fc-gm-next { font-size: .72rem; color: var(--fg-3); margin-top: 3px; }
+
+/* ---- 连续 / 连击 / 精通 / 正确率 ---- */
+.fc-gm-statgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.fc-gm-stat {
+  display: flex; gap: 9px; align-items: flex-start;
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.fc-gm-stat-ico { font-size: 1.15rem; line-height: 1.25; }
+.fc-gm-stat-main { min-width: 0; }
+.fc-gm-stat-label { font-size: .72rem; color: var(--fg-3); }
+.fc-gm-stat-big { font-size: 1.12rem; font-weight: 700; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.fc-gm-stat-sub { font-size: .7rem; color: var(--fg-3); line-height: 1.5; }
+
+/* ---- 每日 / 每周挑战 ---- */
+.fc-gm-task { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+.fc-gm-task:first-of-type { border-top: 0; }
+.fc-gm-task.is-claimed { opacity: .5; }
+.fc-gm-task-ico { font-size: 1.05rem; flex: 0 0 auto; }
+.fc-gm-task-main { flex: 1 1 auto; min-width: 0; }
+.fc-gm-task-text { font-size: .82rem; margin-bottom: 6px; }
+.fc-gm-bar { height: 5px; border-radius: 999px; background: var(--bg-3); overflow: hidden; }
+.fc-gm-bar > i { display: block; height: 100%; background: var(--primary); border-radius: 999px; transition: width .3s; }
+.fc-gm-task-tail { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: .7rem; flex: 0 0 auto; }
+.fc-gm-task-num { color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.fc-gm-task-xp { color: var(--amber); font-weight: 700; }
+.fc-gm-task-done { color: var(--green); font-weight: 700; font-size: .85rem; }
+
+/* ---- 学习日历热力图（列 = 周，行 = 星期，和 GitHub 一致） ---- */
+.fc-gm-hm { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; }
+.fc-gm-hm-days {
+  display: grid; grid-template-rows: repeat(7, var(--fc-hm)); gap: var(--fc-hm-gap);
+  align-items: center; flex: 0 0 auto;
+  padding-top: calc(12px + 5px);
+  font-size: 9px; color: var(--fg-3); line-height: 1;
+}
+.fc-gm-hm-body { display: flex; flex-direction: column; gap: 5px; }
+.fc-gm-hm-months {
+  display: grid; gap: var(--fc-hm-gap); height: 12px;
+  font-size: 9px; color: var(--fg-3); line-height: 1; white-space: nowrap; overflow: hidden;
+}
+.fc-gm-hm-grid {
+  display: grid; grid-auto-flow: column;
+  grid-template-rows: repeat(7, var(--fc-hm));
+  grid-auto-columns: var(--fc-hm);
+  gap: var(--fc-hm-gap);
+}
+.fc-gm-hm-cell { width: var(--fc-hm); height: var(--fc-hm); border-radius: 2px; display: block; background: var(--bg-3); }
+.fc-gm-hm-cell.lv0 { background: var(--bg-3); }
+.fc-gm-hm-cell.lv1 { background: rgba(59, 130, 246, .34); }
+.fc-gm-hm-cell.lv2 { background: rgba(59, 130, 246, .56); }
+.fc-gm-hm-cell.lv3 { background: rgba(59, 130, 246, .78); }
+.fc-gm-hm-cell.lv4 { background: var(--primary); }
+.fc-gm-hm-cell.is-future { opacity: .22; }
+.fc-gm-hm-cell.is-today { outline: 1px solid var(--fg-3); outline-offset: 1px; }
+.fc-gm-hmfoot {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  flex-wrap: wrap; margin-top: 9px; font-size: .7rem; color: var(--fg-3);
+}
+.fc-gm-legend { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ---- 徽章墙 ---- */
+.fc-gm-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.fc-gm-badge {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 6px; border-radius: var(--radius-sm);
+  background: var(--bg-2); border: 1px solid var(--line);
+  filter: grayscale(1); opacity: .45;
+}
+.fc-gm-badge.is-on { background: var(--fc-gm-badge); border-color: var(--primary); filter: none; opacity: 1; }
+.fc-gm-badge-ico { font-size: 1.4rem; line-height: 1; }
+.fc-gm-badge-name { font-size: .66rem; text-align: center; color: var(--fg-2); line-height: 1.35; }
+
+/* ---- 卡片掌握度小圆点 ---- */
+.fc-gm-pips { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; }
+.fc-gm-pips > i { width: 5px; height: 5px; border-radius: 999px; background: var(--bg-3); display: block; }
+.fc-gm-pips > i.on { background: var(--green); }
+/* 卡片列表行：左边掌握度圆点、右边一个「看遗忘曲线」的小按钮 */
+.item-sub .is-sleep { color: var(--amber); font-weight: 600; }
+.item-tail { display: flex; align-items: center; gap: 6px; }
+.item-tail .btn--icon { padding: 5px 7px; font-size: .95rem; }
+
+/* ---- 遗忘曲线 ---- */
+.fc-gm-curvewrap {
+  background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 8px; margin-bottom: 12px;
+}
+.fc-curve { width: 100%; height: 130px; display: block; }
+.fc-curve-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.fc-curve-axis { fill: var(--fg-3); font-size: 9px; }
+.fc-curve-area { fill: rgba(59, 130, 246, .13); }
+.fc-curve-line { fill: none; stroke: var(--primary); stroke-width: 2; }
+.fc-curve-dot.is-ok { fill: var(--green); }
+.fc-curve-dot.is-bad { fill: var(--red); }
+.fc-curve-now { stroke: var(--amber); stroke-width: 1; stroke-dasharray: 2 2; }
+.fc-gm-curvetable { display: flex; flex-direction: column; }
+.fc-gm-curverow {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 7px 0; border-top: 1px solid var(--line); font-size: .82rem;
+}
+.fc-gm-curverow:first-child { border-top: 0; }
+.fc-gm-curverow span { color: var(--fg-3); }
+.fc-gm-note { font-size: .72rem; color: var(--fg-3); line-height: 1.7; margin-top: 10px; }
+.fc-gm-note.is-sleep { color: var(--amber); }
+
+@media (max-width: 360px) {
+  .fc-gm-statgrid { grid-template-columns: 1fr; }
+}

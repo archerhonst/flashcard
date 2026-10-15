@@ -8,6 +8,7 @@
   // T('中文原文', {占位符}) —— 中文下原样返回，英文下查 js/lang/en.js 的词典。详见 js/i18n.js
   var T = global.I18n.T;
   var I18n = global.I18n;
+  var Game = global.Game;
 
   var App = {
     route: 'study',
@@ -156,6 +157,7 @@
     { id: 'study', ico: '🎯', label: '学习' },
     { id: 'cards', ico: '🗂️', label: '卡片' },
     { id: 'cloze', ico: '🕳️', label: '挖空 / AI' },
+    { id: 'growth', ico: '🌱', label: '成长' },
     { id: 'plugins', ico: '🧩', label: '插件' },
     { id: 'settings', ico: '⚙️', label: '设置' }
   ];
@@ -220,6 +222,7 @@
     html += T('<nav class="tabbar" aria-label="主导航">') + TABS.map(function (t) {
       var badge = '';
       if (t.id === 'study' && g.due > 0) badge = '<span class="badge">' + (g.due > 99 ? '99+' : g.due) + '</span>';
+      else if (t.id === 'growth' && claimableCount()) badge = '<span class="badge">' + claimableCount() + '</span>';
       var on = App.route === t.id;
       // 用 <button> 而不是 <div>：能被 Tab 聚焦、被读屏念出来、回车/空格能用
       return '<button type="button" class="tab' + (on ? ' on' : '') + '"' +
@@ -263,6 +266,11 @@
     } else if (App.route === 'cloze') {
       title = T('挖空 & AI');
       sub = T('人工挖空 · 智能挖空 · AI 生成');
+    } else if (App.route === 'growth') {
+      var gp = Game.profile();
+      title = T('成长');
+      sub = 'Lv.' + gp.level + ' · ' + T(gp.title.name) + T(' · 连续 ') + gp.streak.current + T(' 天 · 已精通 ') +
+        gp.masteredCount + T(' 张');
     } else if (App.route === 'plugins') {
       title = T('JSON 插件');
       sub = Plugins.enabledList().length + ' / ' + Plugins.all().length + T(' 个已启用');
@@ -294,6 +302,7 @@
       case 'study': return viewStudy();
       case 'cards': return viewCards();
       case 'cloze': return viewCloze();
+      case 'growth': return viewGrowth();
       case 'plugins': return viewPlugins();
       case 'settings': return viewSettings();
       default: return '';
@@ -483,7 +492,11 @@
     var card = q[App.study.idx];
     if (!card) return;
     pushUndo(card);          // 先留一份「评分前」的样子，点错档位还能救
+    // 成长反馈：评分前后各取一次角色档案，diff 出这一下挣到的经验 / 升级 / 新徽章。
+    // 放在 DB.schedule 两侧是因为 store 的 onReview 钩子就在 schedule 内部触发。
+    var gBefore = Game ? Game.profile() : null;
     DB.schedule(card, r);
+    var gAfter = Game ? Game.profile() : null;
     App.study.done++;
     if (r === 0) {
       App.study.again++;
@@ -492,6 +505,8 @@
     App.study.idx++;
     App.study.revealed = false;
     App.study.typed = null;
+    var grew = (gBefore && gAfter) ? growthFlash(gBefore, gAfter) : '';
+    if (grew) U.toast(grew, 'ok');
     if (App.study.idx >= q.length) {
       U.toast(T('本轮完成！共 {n} 次', {n: App.study.done}), 'ok');
       // keepUndo：这一批是自然结束的，撤销栈对刚评完的那张卡依然有效
@@ -580,12 +595,18 @@
       h += '<div class="list">' + cards.slice(0, 300).map(function (c) {
         var front = Plugins.renderSide(p, c, 'front').replace(/<[^>]+>/g, '').slice(0, 60);
         var st = c.sched.reps === 0 ? T('新卡') : (T('下次 ') + U.fmtDue(c.sched.due));
+        var curveLabel = T('遗忘曲线');
         return '<div class="item" data-act="card:edit" data-id="' + esc(c.id) + '">' +
           '<div class="item-main"><div class="item-title">' + esc(front) + '</div>' +
-          '<div class="item-sub"><span>' + esc(st) + '</span>' +
+          '<div class="item-sub">' + masteryPips(c) +
+          (DB.isSleeping(c) ? T('<b class="is-sleep">💤 已休眠</b>') : '') +
+          '<span>' + esc(st) + '</span>' +
           (c.sched.reps ? T('<span>复习 ') + c.sched.reps + T(' 次</span>') : '') +
           (c.tags && c.tags.length ? '<span>#' + esc(c.tags.join(' #')) + '</span>' : '') +
-          T('</div></div><div class="item-tail">›</div></div>');
+          T('</div></div><div class="item-tail">') +
+          '<button type="button" class="btn btn--icon btn--ghost" data-act="card:curve" data-id="' + esc(c.id) +
+          '" title="' + esc(curveLabel) + '" aria-label="' + esc(curveLabel) + '">📉</button>' +
+          '›</div></div>';
       }).join('') + '</div>';
       if (cards.length > 300) h += T('<div class="muted" style="text-align:center;padding:12px">只显示前 300 张，请用搜索缩小范围</div>');
     }
@@ -1162,6 +1183,294 @@
   /* ============================================================
    * 视图：设置
    * ============================================================ */
+  /* ============================================================
+   * 视图：成长
+   *
+   * 两条成长线在这里会合：
+   *   · 角色线 —— 等级 / 称号 / 徽章 / 连续天数 / 连击 / 每日流水（数据在 Game 里）
+   *   · 卡片线 —— 0-5 级掌握度 / 精通休眠 / 每张卡自己的遗忘曲线（数据挂在 card.sched 上）
+   * 这个页面本身不参与调度计算，唯一的写操作是「领奖」和「唤醒这张卡」。
+   * 所有 class 都以 fc-gm- 开头，配合 app.css 里的 CSS 变量，用户能在自定义 CSS 里整套改掉。
+   * ============================================================ */
+
+  /** 任务措辞。故意写成 switch 而不是模块顶层的映射表：
+   *  顶层求值会把文案冻在加载时的语言上（踩过 TABS 那个坑）。 */
+  function taskText(kind, n) {
+    switch (kind) {
+      case 'reviews':  return T('复习 {n} 张卡', { n: n });
+      case 'newCards': return T('新建 {n} 张卡', { n: n });
+      case 'correct':  return T('答对 {n} 张', { n: n });
+      case 'cloze':    return T('新造 {n} 张挖空卡', { n: n });
+      case 'xp':       return T('获得 {n} 点经验', { n: n });
+      case 'decks':    return T('复习 {n} 个不同牌组', { n: n });
+      case 'mastered': return T('把 {n} 张卡练到精通（5 级）', { n: n });
+      case 'days':     return T('本周学习 {n} 天', { n: n });
+      default:         return '';
+    }
+  }
+
+  function monthLabel(m) {
+    return [T('1月'), T('2月'), T('3月'), T('4月'), T('5月'), T('6月'),
+      T('7月'), T('8月'), T('9月'), T('10月'), T('11月'), T('12月')][m] || '';
+  }
+
+  /** 已完成但还没领奖的挑战数量，用来在「成长」标签上点一个小红点。 */
+  function claimableCount() {
+    try { return Game.challenges().filter(function (c) { return c.done && !c.claimed; }).length; }
+    catch (e) { return 0; }
+  }
+
+  /** 0-5 级掌握度的小圆点。 */
+  function masteryPips(card) {
+    var m = DB.masteryOf(card);
+    var pips = '';
+    for (var i = 1; i <= DB.MASTER_MAX; i++) pips += '<i class="' + (i <= m ? 'on' : '') + '"></i>';
+    var label = T('掌握等级') + ' ' + m + '/' + DB.MASTER_MAX;
+    if (DB.isSleeping(card)) label += ' · ' + T('已精通（休眠中）');
+    return '<span class="fc-gm-pips" role="img" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+      pips + '</span>';
+  }
+
+  /** 把两次 profile() 的差量说成一句人话；没有值得一提的就返回 ''。 */
+  function growthFlash(before, after) {
+    var bits = [];
+    var dxp = after.xp - before.xp;
+    if (dxp > 0) bits.push('+' + dxp + T(' 经验'));
+    if (after.level > before.level) bits.push(T('🎉 升级到 Lv.') + after.level + T('（') + T(after.title.name) + T('）'));
+    var nb = after.badgesGot - before.badgesGot;
+    if (nb > 0) bits.push(T('🏅 解锁 ') + nb + T(' 枚徽章'));
+    return bits.join(T(' · '));
+  }
+
+  function heatmapHTML(hm) {
+    var today = Game.dayKey();
+    // 月份标签：把列按「这一列第一天属于哪个月」切成若干段
+    var segs = [], i = 0;
+    while (i < hm.cols.length) {
+      var m = new Date(hm.cols[i][0].key + 'T00:00:00').getMonth();
+      var j = i;
+      while (j + 1 < hm.cols.length && new Date(hm.cols[j + 1][0].key + 'T00:00:00').getMonth() === m) j++;
+      segs.push({ m: m, start: i, len: j - i + 1 });
+      i = j + 1;
+    }
+    var n = hm.cols.length;
+    return '<div class="fc-gm-hm">' +
+      '<div class="fc-gm-hm-days" aria-hidden="true">' +
+        '<span>' + esc(T('一')) + '</span><span></span><span>' + esc(T('三')) + '</span><span></span>' +
+        '<span>' + esc(T('五')) + '</span><span></span><span>' + esc(T('日')) + '</span>' +
+      '</div>' +
+      '<div class="fc-gm-hm-body">' +
+        '<div class="fc-gm-hm-months" style="grid-template-columns:repeat(' + n + ',var(--fc-hm))">' +
+          segs.map(function (sg) {
+            return '<span style="grid-column:' + (sg.start + 1) + ' / span ' + sg.len + '">' +
+              esc(monthLabel(sg.m)) + '</span>';
+          }).join('') +
+        '</div>' +
+        // 列 = 周，行 = 星期几，和 GitHub 一致：grid-auto-flow: column 让 7 个一列自动折行
+        '<div class="fc-gm-hm-grid">' +
+          hm.cols.map(function (col) {
+            return col.map(function (cell) {
+              var cls = 'fc-gm-hm-cell lv' + cell.level +
+                (cell.key === today ? ' is-today' : '') + (cell.future ? ' is-future' : '');
+              var tt = cell.key + T(' · 复习 ') + cell.reviews + T(' 次 · 新建 ') + (cell.count - cell.reviews) + T(' 张');
+              return '<i class="' + cls + '" title="' + esc(tt) + '"></i>';
+            }).join('');
+          }).join('') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="fc-gm-hmfoot"><span>' + T('最近 ') + hm.weeks + T(' 周 · 活跃 ') + hm.activeDays +
+      T(' 天 · 共 ') + hm.total + T(' 次') + '</span>' +
+      '<span class="fc-gm-legend">' + T('少') +
+        [0, 1, 2, 3, 4].map(function (lv) { return '<i class="fc-gm-hm-cell lv' + lv + '"></i>'; }).join('') +
+        T('多') + '</span></div>';
+  }
+
+  function taskRowHTML(t) {
+    return '<div class="fc-gm-task' + (t.claimed ? ' is-claimed' : '') + (t.done ? ' is-done' : '') + '">' +
+      '<span class="fc-gm-task-ico" aria-hidden="true">' + t.ico + '</span>' +
+      '<div class="fc-gm-task-main">' +
+        '<div class="fc-gm-task-text">' + esc(taskText(t.kind, t.target)) + '</div>' +
+        '<div class="fc-gm-bar"><i style="width:' + t.pct + '%"></i></div>' +
+      '</div>' +
+      '<div class="fc-gm-task-tail"><span class="fc-gm-task-num">' + t.now + ' / ' + t.target + '</span>' +
+        (t.claimed ? '<span class="fc-gm-task-xp is-got">✓</span>'
+                   : '<span class="fc-gm-task-xp">+' + t.xp + '</span>') +
+      '</div></div>';
+  }
+
+  function statCell(ico, label, big, sub) {
+    return '<div class="fc-gm-stat"><span class="fc-gm-stat-ico" aria-hidden="true">' + ico + '</span>' +
+      '<div class="fc-gm-stat-main"><div class="fc-gm-stat-label">' + esc(label) + '</div>' +
+      '<div class="fc-gm-stat-big">' + esc(big) + '</div>' +
+      '<div class="fc-gm-stat-sub">' + esc(sub) + '</div></div></div>';
+  }
+
+  function viewGrowth() {
+    var p = Game.profile();
+    var hm = Game.heatmap(26);
+    var ch = Game.challenges();
+    var badges = Game.badgeList();
+    var gotBadges = badges.filter(function (b) { return b.got; }).length;
+    var daily = ch.filter(function (c) { return c.scope === 'd'; });
+    var weekly = ch.filter(function (c) { return c.scope === 'w'; });
+    var claimable = ch.filter(function (c) { return c.done && !c.claimed; }).length;
+
+    var h = '<div class="fc-gm">';
+
+    /* ---- 角色面板 ---- */
+    h += '<div class="card-panel fc-gm-hero">' +
+      '<div class="fc-gm-avatar" aria-hidden="true">' + esc(p.title.ico) + '</div>' +
+      '<div class="fc-gm-hero-main">' +
+        '<div class="fc-gm-hero-top">' +
+          '<b class="fc-gm-title">' + esc(T(p.title.name)) + '</b>' +
+          '<span class="fc-gm-level">Lv.' + p.level + '</span>' +
+        '</div>' +
+        '<div class="fc-gm-xpbar" role="progressbar" aria-valuemin="0" aria-valuemax="' + p.needLevel +
+          '" aria-valuenow="' + p.inLevel + '"><i style="width:' + p.pct + '%"></i></div>' +
+        '<div class="fc-gm-xp-text">' + p.inLevel + ' / ' + p.needLevel + T(' 经验') +
+          (p.toNext > 0 ? T(' · 还差 ') + p.toNext + T(' 点到 Lv.') + (p.level + 1) : '') + '</div>' +
+        (p.nextTitle
+          ? '<div class="fc-gm-next">' + T('下一个称号：') + esc(T(p.nextTitle.name)) + ' (Lv.' + p.nextTitle.min + ')</div>'
+          : '<div class="fc-gm-next">' + T('已经是最高称号了') + '</div>') +
+      '</div></div>';
+
+    /* ---- 连续天数 / 连击 / 精通 / 正确率 ---- */
+    h += '<div class="fc-gm-statgrid">' +
+      statCell('🔥', T('连续天数'), I18n.count(p.streak.current, ' 天'),
+        (p.streak.studiedToday ? T('今天已打卡') : T('今天还没学')) + T(' · 最长 ') + I18n.count(p.streak.best, ' 天')) +
+      statCell('⚡', T('当前连击'), I18n.count(p.streak.combo, ' 次'),
+        T('最佳 ') + I18n.count(p.streak.bestCombo, ' 次 · 断连只清连击')) +
+      statCell('🏅', T('已精通'), p.masteredCount + T(' 张'),
+        T('累计复习 ') + I18n.count(p.reviews, ' 次')) +
+      statCell('🎯', T('正确率'), p.accuracy + '%',
+        T('连击加成 +') + Math.round((p.streakBonus - 1) * 100) + '%') +
+      '</div>';
+
+    /* ---- 每日 / 每周挑战 ---- */
+    h += '<div class="card-panel">' +
+      '<div class="section-title">🎯 ' + esc(T('今日挑战')) + '</div>' +
+      daily.map(taskRowHTML).join('') +
+      '<div class="section-title" style="margin-top:16px">📅 ' + esc(T('本周挑战')) + '</div>' +
+      weekly.map(taskRowHTML).join('') +
+      (claimable
+        ? T('<button class="btn btn--primary btn--block" style="margin-top:12px" data-act="gm:claim">领取 ') +
+          claimable + T(' 个已完成的奖励</button>')
+        : T('<div class="muted" style="margin-top:12px;text-align:center">完成上面的挑战，奖励会自动出现在这里</div>')) +
+      '</div>';
+
+    /* ---- 学习日历热力图 ---- */
+    h += '<div class="card-panel">' +
+      '<div class="section-title">📅 ' + esc(T('学习日历')) + '</div>' +
+      heatmapHTML(hm) +
+      '</div>';
+
+    /* ---- 徽章 ---- */
+    h += '<div class="card-panel">' +
+      '<div class="section-title">🏅 ' + esc(T('徽章')) + ' ' + gotBadges + ' / ' + badges.length + '</div>' +
+      '<div class="fc-gm-badges">' + badges.map(function (b) {
+        return '<div class="fc-gm-badge' + (b.got ? ' is-on' : '') + '" title="' + esc(T(b.desc)) + '">' +
+          '<span class="fc-gm-badge-ico" aria-hidden="true">' + (b.got ? b.ico : '🔒') + '</span>' +
+          '<span class="fc-gm-badge-name">' + esc(T(b.name)) + '</span></div>';
+      }).join('') + '</div></div>';
+
+    /* ---- 成长数据 ---- */
+    h += '<div class="card-panel">' +
+      '<div class="section-title">💾 ' + esc(T('成长数据（JSON）')) + '</div>' +
+      T('<div class="muted" style="margin-bottom:10px">等级、经验、称号、徽章、连续天数、每日学习流水、每张卡的掌握度——整个成长体系都能导出成一份 JSON。</div>') +
+      '<div class="row row--wrap" style="gap:8px">' +
+      T('<button class="btn btn--sm" data-act="gm:export">导出成长 JSON</button>') +
+      T('<button class="btn btn--sm" data-act="gm:export-cards">含卡片掌握度</button>') +
+      T('<button class="btn btn--sm" data-act="gm:import">导入成长 JSON</button>') +
+      T('<button class="btn btn--sm btn--danger" data-act="gm:reset">重置成长数据</button>') +
+      '</div></div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  /* ---- 单张卡的遗忘曲线 ---- */
+  function openCurveModal(card) {
+    if (!card) return;
+    var f = Game.forgetting(card);
+    if (!f) return;
+    var m = DB.masteryOf(card);
+    var rows = [
+      [T('掌握等级'), m + ' / ' + DB.MASTER_MAX],
+      [T('记忆稳定度'), f.stability.toFixed(1) + T(' 天')],
+      [T('当前复习间隔'), f.interval + T(' 天')],
+      [T('此刻还记得的概率'), Math.round(f.retentionNow * 100) + '%'],
+      [T('预计下次复习'), f.nextIn <= 0 ? T('就是现在') : f.nextIn.toFixed(1) + T(' 天后')],
+      [T('累计复习次数'), f.reviews + T(' 次')]
+    ];
+    var body = '<div class="fc-gm-curvewrap">' + Game.curveSVG(card) + '</div>' +
+      '<div class="fc-gm-curvetable">' + rows.map(function (r) {
+        return '<div class="fc-gm-curverow"><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>';
+      }).join('') + '</div>' +
+      T('<div class="fc-gm-note">曲线用的是 R(t) = e^(−t/S)：S 由 SRS 自己排出的间隔反推，所以图上的预测和调度器永远一致，不会出现「图上说该复习了、调度器却说还早」。圆点是你真实的复习记录，绿=答对，红=答错。</div>') +
+      (DB.isSleeping(card)
+        ? T('<div class="fc-gm-note is-sleep">💤 这张卡已经精通（5 级），不再主动推给你复习。想再练一次就点下面的「唤醒」——唤醒会掉一级，需要重新靠复习赚回精通。</div>')
+        : '');
+
+    var sleeping = DB.isSleeping(card);
+    var actions = T('<button class="btn btn--ghost" data-act="m:close">关闭</button>') +
+      (sleeping
+        ? T('<button class="btn btn--primary" data-act="card:wake" data-id="') + esc(card.id) + T('">💤 唤醒这张卡</button>')
+        : '');
+
+    var modal = openModal(esc(T('遗忘曲线')) + ' · Lv.' + m, body, actions);
+    modal.addEventListener('click', function (e) {
+      var act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if (act === 'm:close') closeModal(modal);
+      if (act === 'card:wake') {
+        DB.wakeCard(card.id);
+        closeModal(modal);
+        U.toast(T('已唤醒，这张卡重新回到复习队列'), 'ok');
+        render(true);
+      }
+    });
+  }
+
+  /* ---- 成长数据的导出 / 导入 ---- */
+  function growthExportFlow(includeCards) {
+    var data = Game.exportJSON({ includeCards: !!includeCards });
+    var name = 'flashcards-growth-' + new Date().toISOString().slice(0, 10) + '.json';
+    U.download(name, JSON.stringify(data, null, 2));
+    U.toast(T('已导出成长数据'), 'ok');
+  }
+
+  function growthImportFlow() {
+    U.pickFile('.json,application/json').then(function (f) {
+      if (!f) return;
+      var data;
+      try { data = JSON.parse(f.text); }
+      catch (e) { U.toast(T('文件不是合法 JSON'), 'error'); return; }
+      // 兼容：整份备份里也带着成长数据，直接丢给 Game 会因为 format 不对而报错，
+      // 这里替用户把 growth 那一层剥出来。
+      if (data && data.format === 'flashcards-backup' && data.growth) data = data.growth;
+      U.confirmBox(T('导入成长数据'),
+        T('「合并」会把两边的经验、徽章、学习流水取并集（等级只升不降），适合多台设备一起用；「替换」会清空当前成长数据。'),
+        T('合并导入')).then(function (ok) {
+          try {
+            var r = Game.importJSON(data, ok ? 'merge' : 'replace');
+            U.toast(T('导入完成：Lv.') + r.level + T(' · ') + r.cards + T(' 张卡掌握度已同步'), 'ok');
+            render(true);
+          } catch (e) { U.toast(T('导入失败：') + e.message, 'error'); }
+        });
+    });
+  }
+
+  function growthResetFlow() {
+    U.confirmBox(T('重置成长数据'),
+      T('等级、经验、徽章、连续天数、每日学习流水都会清空，卡片本身的复习进度不受影响。确定吗？'),
+      T('确认重置')).then(function (ok) {
+        if (!ok) return;
+        Game._reset();
+        U.toast(T('成长数据已重置'), 'ok');
+        render(true);
+      });
+  }
+
   function viewSettings() {
     var s = DB.getSettings();
     var h = '';
@@ -1519,6 +1828,29 @@
           });
         });
         break;
+
+      /* ---- 成长 ---- */
+      case 'gm:claim': {
+        var cl = Game.claimTasks();
+        if (cl.xp > 0) {
+          U.toast(T('领到 {n} 点经验（{m} 个任务）', {n: cl.xp, m: cl.count}), 'ok');
+          render(true);
+        } else {
+          U.toast(T('还没有可以领取的奖励'));
+        }
+        break;
+      }
+      case 'gm:export': growthExportFlow(false); break;
+      case 'gm:export-cards': growthExportFlow(true); break;
+      case 'gm:import': growthImportFlow(); break;
+      case 'gm:reset': growthResetFlow(); break;
+      case 'card:curve':
+        e.stopPropagation();
+        openCurveModal(DB.getCard(id));
+        break;
+      // card:wake / m:close 不在这里处理：它们只出现在模态框内部，
+      // 模态框自己已经绑了 click（见 openCurveModal / openModal）。
+      // 这里再来一次会让 wakeCard 跑两遍——一次掉一级，两遍掉两级。
     }
   }
 

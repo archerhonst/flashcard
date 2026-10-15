@@ -11,7 +11,7 @@
 [![零依赖](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)](#文件结构)
 [![行为测试](https://img.shields.io/badge/selftest-360%20passing-brightgreen?style=flat-square)](#自检)
 [![静态检查](https://img.shields.io/badge/staticcheck-172%20passing-brightgreen?style=flat-square)](#自检)
-[![界面语言](https://img.shields.io/badge/i18n-简体中文%20%7C%20English-orange?style=flat-square)](#-界面语言)
+[![界面语言](https://img.shields.io/badge/i18n-简体中文%20%7C%20English-orange?style=flat-square)](#界面语言)
 
 <p>
   <img src="docs/01-choose-language.png" width="170" alt="进入前选择语言">
@@ -35,6 +35,7 @@
   - [AI](#ai)
   - [JSON 插件系统](#json-插件系统)
   - [学习与数据](#学习与数据)
+  - [成长体系](#成长体系)
   - [界面语言](#界面语言)
   - [外观与自定义 CSS](#外观与自定义-css)
 - [配置 AI](#配置-ai)
@@ -165,6 +166,74 @@ python3 -m http.server 8000     # 然后浏览器打开 http://localhost:8000
   表头按字段 key 或字段标签匹配，对不上的列直接忽略；含逗号、换行、双引号的单元格都能正确解析
 - 完整备份 / 恢复（导出 JSON）、单牌组导出
 
+### 成长体系
+
+两套平行的成长线，都在本地算完就好，**不联网、不设体力、不做惩罚**。
+
+**角色成长（全局）**
+
+- 复习、新建卡片（挖空卡给得更多）、完成任务都给经验，升级解锁 9 档称号
+  （见习学徒 → 记忆学徒 → … → 传说记忆者）
+- **22 枚徽章**：复习次数、连续天数、连击、挖空、精通数量、等级、任务、早起鸟 / 夜猫子、多线并行……
+  徽章**只增不减**
+- **连续天数**：断掉只清空「连续天数」和「连击」，**经验和已经拿到的徽章一律不动**
+- **每日 3 个 + 每周 2 个挑战**：按日期 / 周次做种子抽取，同一天刷新页面拿到的是同一套；
+  完成后在 `成长` 页领奖（有奖励可领时标签上会出现小红点）
+- 连击加成：连续评「良好 / 简单」会额外给经验（最多 +40%），答错就断连
+
+**卡片成长（每张卡）**
+
+- 每张卡有 **0–5 级掌握度**，由 SRS 评分自动升降：答错 −2、困难 −1、良好 +1、简单 +2
+- **复习间隔没长到 21 天之前封顶 4 级** —— 连点「简单」骗不到精通
+- 升到 **5 级 = 精通**，这张卡就**进入休眠**，不再被主动推送复习；
+  想再练可以手动**唤醒**（唤醒会掉一级，得重新靠复习赚回精通）
+- 每张卡有**自己的遗忘曲线**：按 `R(t) = e^(−t/S)` 画，`S` 是当前调度反推出来的记忆稳定度，
+  再把你真实的复习记录（绿点 = 答对，红点 = 答错）叠在曲线上。
+  在 `卡片` 里点卡片行右侧的 📉 打开
+- 曲线和调度器用的是同一套数字，所以不会出现「图说该复习了、调度器说还早」这种自相矛盾
+
+**学习日历热力图**
+
+- 最近 26 周，列 = 周、行 = 星期几，分五档：0 / 1–2 / 3–5 / 6–10 / 11+ 次
+- 分档用的是固定阈值，不按最大值归一化 —— 某一天爆量不会把整年染色
+- 每日学习流水保留 760 天
+
+**全部可换肤、可导出**
+
+- 角色面板、进度条、徽章、热力图、遗忘曲线的类名都是 `fc-gm-*` / `fc-curve-*`，
+  配色和尺寸走 CSS 变量，可以在 `设置 → 外观 → 自定义 CSS` 里整块改掉
+  （见下面[外观与自定义 CSS](#外观与自定义-css)）
+- 成长数据（等级、经验、称号、徽章、连续天数、每日流水、每张卡的掌握度）可以整体
+  导出 / 导入成一份 JSON：`成长` 页的「导出成长 JSON」/「导入成长 JSON」。
+  合并导入**只会往上取，不会把你的经验改低**；这份 JSON 也会一起进完整备份
+
+<details>
+<summary>成长 JSON 的结构</summary>
+
+```jsonc
+{
+  "format": "flashcards-growth",
+  "version": 1,
+  "exportedAt": 1760000000000,
+  "profile": {
+    "xp": 520, "level": 12, "reviews": 286, "correct": 269, "wrong": 17,
+    "created": 16, "clozeCreated": 12,
+    "streak": 1, "bestStreak": 9, "combo": 2, "bestCombo": 47,
+    "lastStudyDay": "2026-10-15", "masteredCount": 16, "tasksDone": 7
+  },
+  "badges": ["first_review", "streak3"],
+  "mastered": ["card-id-1"],
+  "claimed": ["2026-10-15:t2"],
+  "stats": { "2026-10-15": { "reviews": 5, "correct": 4, "xp": 46 } },
+  // 只有点「含卡片掌握度」导出时才有：把每张卡的掌握度/休眠/下次复习也带上
+  "cards": [{ "id": "card-id-1", "mastery": 5, "sleeping": true, "due": 1760200000000 }]
+}
+```
+
+导入时：`merge`（默认）逐项取大值 / 取并集；`replace` 直接覆盖。两者都不会删你的卡片。
+
+</details>
+
 ### 界面语言
 
 - **进入软件前先选语言**（简体中文 / English），之后可在 `设置 → 外观` 随时切换
@@ -195,6 +264,8 @@ python3 -m http.server 8000     # 然后浏览器打开 http://localhost:8000
 | `--radius` `--radius-sm` | 圆角 |
 | `--card-w` | 卡片最大宽度 |
 | `--fs` | 基准字号 |
+| `--fc-hm` `--fc-hm-gap` | 成长体系：学习日历格子边长 / 间距 |
+| `--fc-gm-xp` `--fc-gm-badge` | 成长体系：经验条填充、已解锁徽章底色 |
 
 ```css
 /* 换主色 */
@@ -203,6 +274,13 @@ html[data-theme] { --primary: #e11d48; }
 /* 卡片圆角更大、正文行距更松 */
 html[data-theme] { --radius: 20px; }
 .flip-front, .flip-back { line-height: 2; }
+
+/* 热力图放大一倍，经验条换成绿色 */
+html[data-theme] { --fc-hm: 18px; --fc-gm-xp: var(--green); }
+
+/* 也可以直接改成长面板本身的类 */
+.fc-gm-hero { background: linear-gradient(135deg, #1e293b, #0f172a); }
+.fc-gm-badge.is-on { border-color: var(--amber); }
 ```
 
 > ⚠ **一定要用 `html[data-theme]` 而不是 `:root`。**
@@ -301,16 +379,16 @@ html[data-theme] { --radius: 20px; }
 三套脚本**零依赖**，只要本机有 Node（≥ 18）：
 
 ```bash
-node tools/selftest.js           # 行为测试：调度算法、挖空映射、模板引擎、插件校验、导入导出…
+node tools/selftest.js           # 行为测试：调度算法、挖空映射、模板引擎、插件校验、成长体系、导入导出…
 node tools/staticcheck.js        # 静态检查：全局名、跨模块调用拼写、DOM id、资源、文案全覆盖
-node tools/check-apk-shell.js    # 可选：检查另一个 Java 壳工程（本仓库不含，找不到就跳过）
+node tools/check-apk-shell.js    # 可选：检查打包器里那份网页副本与本体是否同步（找不到就跳过）
 ```
 
 全绿的样子：
 
 ```
-✓ 全部通过：360 项检查
-✓ 静态检查全部通过：172 项
+✓ 全部通过：477 项检查
+✓ 静态检查全部通过：178 项
 ```
 
 它们的存在理由是：这个项目**没有构建步骤**，也没有测试框架，
@@ -341,17 +419,18 @@ flashcard/
 │   ├── lang/
 │   │   └── en.js           # 英文词典（键 = 中文原文，值 = 译文）
 │   ├── util.js             # 工具：DOM、转义、模板引擎（Mustache 子集 + 过滤器）、localStorage 封装
-│   ├── store.js            # 数据层：牌组/卡片/日志/SM-2 调度/导入导出
+│   ├── store.js            # 数据层：牌组/卡片/日志/SM-2 调度/掌握度与休眠/导入导出
+│   ├── game.js             # 成长体系：经验与等级、称号、徽章、连续天数、每日每周挑战、热力图、遗忘曲线、成长 JSON
 │   ├── cloze.js            # 挖空引擎：解析、明文↔标记双向映射、点词挖空、本地智能挖空、渲染、拆卡
-│   ├── plugins.js          # JSON 插件系统：校验、安装、模板渲染、CSS 作用域、AI 提示词契约
+│   ├── plugins.js          # JSON 插件系统：校验、安装、模板渲染、CSS 作用域、AI 提示词契约、多语言文案
 │   ├── ai.js               # OpenAI 兼容客户端 + AI 挖空 / AI 生成卡片 + 本地兜底
 │   └── app.js              # 视图层与全部交互
 ├── plugins/                # 示例插件（都是可以直接导入的 .json）
 ├── docs/                   # README 用的截图
 ├── tools/                  # 自检脚本
-│   ├── selftest.js         # 把核心逻辑加载进 Node，跑 360 项行为测试
-│   ├── staticcheck.js      # 不执行代码，静态扫 172 项接缝 / DOM id / 资源 / 文案全覆盖
-│   └── check-apk-shell.js  # 可选：另一个 Java 壳工程的同步检查
+│   ├── selftest.js         # 把核心逻辑加载进 Node，跑 477 项行为测试
+│   ├── staticcheck.js      # 不执行代码，静态扫 178 项接缝 / DOM id / 资源 / 文案全覆盖
+│   └── check-apk-shell.js  # 可选：比对打包器里的网页副本与本体
 ├── 插件开发文档.md          # ★ 插件 API 完整参考
 └── android/                # APK 壳工程源码（Kotlin + WebView，供改造参考）
     └── README-打包.md       # 工程结构、壳与网页的接口约定、排错

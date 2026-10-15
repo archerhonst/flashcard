@@ -86,6 +86,23 @@
     return out;
   }
 
+  /** 当前语言的词典里有没有这条译文 */
+  function has(key) {
+    var table = DICT[cur];
+    return !!(table && Object.prototype.hasOwnProperty.call(table, key));
+  }
+
+  /**
+   * 数量 + 单位。中文没有单复数，英文有，所以这里单独走一条路：
+   *   count(1, ' 天') → 中文 "1 天" / 英文 "1 day"（词典里优先查 ' 天#1'）
+   *   count(3, ' 天') → 中文 "3 天" / 英文 "3 days"
+   * 中文词典里不写 ' 天#1' 也不会露馅——查不到就回落到复数形，而中文两形本来就一样。
+   */
+  function count(n, unit) {
+    var k = (n === 1 && has(unit + '#1')) ? unit + '#1' : unit;
+    return String(n) + T(k);
+  }
+
   /** 语言自己的名字（用该语言书写），给语言选择页用 */
   function labelOf(id) {
     var nid = normalize(id);
@@ -113,6 +130,8 @@
     setLang: setLang,
     applyDocumentLang: applyDocumentLang,
     T: T,
+    has: has,
+    count: count,
     labelOf: labelOf,
     englishOf: englishOf,
     dict: dict

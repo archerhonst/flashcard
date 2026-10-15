@@ -64,7 +64,13 @@
     if (diff <= 0) return T('待复习');
     if (diff < 3600000) return Math.round(diff / 60000) + T(' 分钟后');
     if (diff < DAY) return Math.round(diff / 3600000) + T(' 小时后');
-    return Math.round(diff / DAY) + T(' 天后');
+    var days = Math.round(diff / DAY);
+    // 超过约 3 年就换成年，超过 10 年直接说「很久以后」——
+    // 一张被反复评「简单」的卡，间隔会指数增长到天文数字，逐位念出来没有意义。
+    if (days > 3650) return T('很久以后');
+    if (days > 1095) return Math.round(days / 365) + T(' 年后');
+    if (days > 60) return Math.round(days / 30) + T(' 个月后');
+    return days + T(' 天后');
   }
   function startOfDay(ts) {
     var d = new Date(ts || now());

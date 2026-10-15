@@ -120,8 +120,56 @@
   }
   function getCard(id) { return state.cards.filter(function (c) { return c.id === id; })[0] || null; }
 
+  /* 卡片的知识掌握等级 0-5。
+     5 级 = 精通 = 休眠，不再被主动推给你复习，但仍可以在卡片库里手动唤醒。
+     这个等级只做「反馈」，不参与间隔计算——调度永远是 SM-2 说了算。 */
+  var MASTER_MAX = 5;
+  var MATURE_DAYS = 21;   // 间隔拉到 21 天才算「成熟」，才允许升到 5 级
+  var MAX_INTERVAL_DAYS = 3650;  // 复习间隔封顶 10 年，避免指数增长算出天文数字
+
   function newCardSched() {
-    return { due: U.now(), interval: 0, ease: 2.5, reps: 0, lapses: 0, lastReviewed: 0, state: 'new' };
+    return {
+      due: U.now(), interval: 0, ease: 2.5, reps: 0, lapses: 0, lastReviewed: 0, state: 'new',
+      mastery: 0, sleeping: false
+    };
+  }
+
+  function masteryOf(card) {
+    return card && card.sched ? U.clamp(card.sched.mastery || 0, 0, MASTER_MAX) : 0;
+  }
+  function isSleeping(card) {
+    return !!(card && card.sched && card.sched.sleeping);
+  }
+
+  /**
+   * 按这次的评分升降掌握等级。
+   *   重来 -2 / 困难 -1 / 良好 +1 / 简单 +2
+   * 关键是那个 cap：间隔没到 MATURE_DAYS 时最高只能到 4 级。
+   * 「5 级就休眠、不再推送」是个会影响复习覆盖面的决定，
+   * 不能靠连点几下「简单」骗过去——必须由 SRS 自己的间隔来背书。
+   */
+  function applyMastery(sched, rating) {
+    var before = U.clamp(sched.mastery || 0, 0, MASTER_MAX);
+    var delta = rating === 0 ? -2 : rating === 1 ? -1 : rating === 2 ? 1 : 2;
+    var iv = sched.interval || 0;
+    var cap = iv >= MATURE_DAYS ? MASTER_MAX : MASTER_MAX - 1;
+    var after = U.clamp(before + delta, 0, cap);
+    sched.mastery = after;
+    sched.sleeping = after >= MASTER_MAX;
+    return { before: before, after: after, mastered: sched.sleeping && before < MASTER_MAX };
+  }
+
+  /** 手动唤醒一张休眠的卡：掉一级，重新靠复习赚回精通。 */
+  function wakeCard(id) {
+    var c = getCard(id);
+    if (!c || !c.sched) return null;
+    c.sched.sleeping = false;
+    c.sched.mastery = Math.min(c.sched.mastery || 0, MASTER_MAX - 1);
+    // 立刻回到队列：把 due 拉到当下，不用等原来的长间隔
+    c.sched.due = U.now();
+    c.sched.state = 'review';
+    persist('cards');
+    return c;
   }
 
   function createCard(deckId, pluginId, fields, tags) {
@@ -138,6 +186,7 @@
     delete card.fields.__clozeIndex;
     state.cards.push(card);
     persist('cards');
+    if (global.Game && global.Game.onCardsCreated) global.Game.onCardsCreated([card]);
     return card;
   }
 
@@ -158,6 +207,7 @@
       out.push(card);
     });
     persist('cards');
+    if (out.length && global.Game && global.Game.onCardsCreated) global.Game.onCardsCreated(out);
     return out;
   }
 
@@ -201,16 +251,19 @@
       ease = U.clamp(ease - 0.2, 1.3, 3.2);
       interval = 0;
       dueAt = U.now() + 10 * 60 * 1000; // 10 分钟后重来
-    } else if (rating === 1) {
-      ease = U.clamp(ease - 0.15, 1.3, 3.2);
-      interval = interval < 1 ? 1 : Math.max(1, Math.round(interval * 1.2));
-      dueAt = U.now() + interval * U.DAY;
-    } else if (rating === 2) {
-      interval = interval < 1 ? 1 : Math.round(interval * ease);
-      dueAt = U.now() + interval * U.DAY;
     } else {
-      ease = U.clamp(ease + 0.15, 1.3, 3.2);
-      interval = interval < 1 ? 4 : Math.round(interval * ease * 1.3);
+      if (rating === 1) {
+        ease = U.clamp(ease - 0.15, 1.3, 3.2);
+        interval = interval < 1 ? 1 : Math.max(1, Math.round(interval * 1.2));
+      } else if (rating === 2) {
+        interval = interval < 1 ? 1 : Math.round(interval * ease);
+      } else {
+        ease = U.clamp(ease + 0.15, 1.3, 3.2);
+        interval = interval < 1 ? 4 : Math.round(interval * ease * 1.3);
+      }
+      // 封顶：间隔是指数增长的，一路点「简单」会算出「2000 万天」这种天文数字，
+      // 既没有意义，也会让 due 逼近时间戳的精度上限。10 年已经远超任何真实复习需求。
+      if (interval > MAX_INTERVAL_DAYS) interval = MAX_INTERVAL_DAYS;
       dueAt = U.now() + interval * U.DAY;
     }
 
@@ -221,11 +274,21 @@
       reps: (s.reps || 0) + 1,
       lapses: lapses,
       lastReviewed: U.now(),
-      state: rating === 0 ? 'relearning' : (interval >= 21 ? 'review' : 'learning')
+      state: rating === 0 ? 'relearning' : (interval >= 21 ? 'review' : 'learning'),
+      // 掌握等级跟着一起走：撤销评分时用 restoreSched 整体还原，等级也会一起回去
+      mastery: U.clamp(s.mastery || 0, 0, MASTER_MAX),
+      sleeping: !!s.sleeping
     };
+    var mres = applyMastery(card.sched, rating);
     state.logs.push({ t: U.now(), cardId: card.id, deckId: card.deckId, rating: rating, interval: interval });
     if (state.logs.length > 20000) state.logs = state.logs.slice(-15000);
     persist('cards'); persist('logs');
+
+    // 成长体系挂钩：只加经验/徽章/连续天数，绝不反过来改调度。
+    if (global.Game) {
+      if (mres.mastered && global.Game.onMastered) global.Game.onMastered(card.id);
+      if (global.Game.onReview) global.Game.onReview(card, rating);
+    }
     return card.sched;
   }
 
@@ -280,7 +343,8 @@
 
   function dueCards(deckId, limit) {
     var t = U.now();
-    var pool = listCards(deckId).filter(function (c) { return !c.suspended; });
+    // 休眠（5 级精通）的卡不再主动推送 —— 这是「精通后不再打扰」的唯一实现点
+    var pool = listCards(deckId).filter(function (c) { return !c.suspended && !isSleeping(c); });
     var learning = pool.filter(function (c) { return c.sched.reps > 0 && c.sched.due <= t; });
     var fresh = pool.filter(function (c) { return c.sched.reps === 0; });
     fresh.sort(function (a, b) { return a.createdAt - b.createdAt; });
@@ -293,8 +357,15 @@
   function deckStats(deckId) {
     var t = U.now();
     var cards = listCards(deckId);
-    var s = { total: cards.length, due: 0, fresh: 0, learning: 0, young: 0, mature: 0, suspended: 0 };
+    var s = {
+      total: cards.length, due: 0, fresh: 0, learning: 0, young: 0, mature: 0, suspended: 0,
+      sleeping: 0, mastered: 0, mastery: [0, 0, 0, 0, 0, 0]
+    };
     cards.forEach(function (c) {
+      var m = masteryOf(c);
+      s.mastery[m]++;
+      if (m >= 5) s.mastered++;
+      if (isSleeping(c)) s.sleeping++;
       if (c.suspended) { s.suspended++; return; }
       if (c.sched.reps === 0) s.fresh++;
       else if (c.sched.due <= t) s.due++;
@@ -448,7 +519,10 @@
       decks: state.decks,
       cards: state.cards,
       settings: state.settings,
-      plugins: U.Store.get(KEYS.plugins, [])
+      plugins: U.Store.get(KEYS.plugins, []),
+      // 角色成长 + 每日流水。卡片掌握度本来就在 cards[].sched 里，不用再带一份。
+      // Game 没加载时（比如某些自检场景）就跳过，不影响备份本身。
+      growth: global.Game ? global.Game.exportJSON({ includeCards: false }) : undefined
     };
   }
 
@@ -476,6 +550,12 @@
       });
     }
     persist('decks'); persist('cards'); persist('settings');
+    // 成长数据并进来。merge 模式下经验取两边较大值、徽章取并集——
+    // 从不在合并时把对方的等级调低，这是这个体系「只加不减」的一部分。
+    if (data.growth && global.Game) {
+      try { global.Game.importJSON(data.growth, mode === 'replace' ? 'replace' : 'merge'); }
+      catch (e) { /* 成长数据坏了不该让整份备份导入失败 */ }
+    }
     return { decks: state.decks.length, cards: state.cards.length };
   }
 
@@ -505,6 +585,8 @@
     updateCard: updateCard, deleteCard: deleteCard, deleteCards: deleteCards,
     newCardSched: newCardSched, schedule: schedule, previewIntervals: previewIntervals,
     restoreSched: restoreSched, leechCards: leechCards, isLeech: isLeech,
+    masteryOf: masteryOf, isSleeping: isSleeping, wakeCard: wakeCard, applyMastery: applyMastery,
+    MASTER_MAX: MASTER_MAX, MATURE_DAYS: MATURE_DAYS, MAX_INTERVAL_DAYS: MAX_INTERVAL_DAYS,
     dueCards: dueCards, deckStats: deckStats, globalStats: globalStats,
     getSettings: getSettings, saveSettings: saveSettings, resetSettings: resetSettings,
     exportAll: exportAll, importAll: importAll, exportDeck: exportDeck, clearAll: clearAll,

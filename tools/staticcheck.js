@@ -18,7 +18,7 @@ const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const SRC_DIRS = ['js'];
-const ALL = ['index.html', 'js/util.js', 'js/i18n.js', 'js/lang/en.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/ai.js', 'js/app.js'];
+const ALL = ['index.html', 'js/util.js', 'js/i18n.js', 'js/lang/en.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js', 'js/app.js'];
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -79,7 +79,7 @@ const ctx = vm.createContext(sb);
 
 group('加载逻辑模块');
 // i18n 必须最先（plugins.js 在顶层就取 global.I18n.T），en.js 紧随其后（调用 I18n.register）
-const LOAD = ['js/i18n.js', 'js/lang/en.js', 'js/util.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/ai.js'];
+const LOAD = ['js/i18n.js', 'js/lang/en.js', 'js/util.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js'];
 for (const rel of LOAD) {
   try { vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), ctx, { filename: rel }); ok(`加载 ${rel}`, true); }
   catch (e) { ok(`加载 ${rel}`, false, e.message); }
@@ -296,14 +296,14 @@ for (const rel of LOAD.concat(['js/app.js'])) {
 }
 // 脚本顺序：直接读 index.html 的真实顺序，而不是假设一个顺序。
 // util.js 必须最先（所有模块都依赖 U），app.js 必须最后（依赖前面全部）。
-const order = ['js/i18n.js', 'js/lang/en.js', 'js/util.js', 'js/store.js', 'js/cloze.js', 'js/plugins.js', 'js/ai.js', 'js/app.js'];
+const order = ['js/i18n.js', 'js/lang/en.js', 'js/util.js', 'js/store.js', 'js/game.js', 'js/cloze.js', 'js/plugins.js', 'js/ai.js', 'js/app.js'];
 const htmlOrder = [];
 {
   const re = /<script\s+src="([^"]+)"/g;
   let mm;
   while ((mm = re.exec(html)) !== null) htmlOrder.push(mm[1]);
 }
-ok('index.html 按顺序引用了全部 8 个脚本', htmlOrder.length === 8, JSON.stringify(htmlOrder));
+ok(`index.html 按顺序引用了全部 ${order.length} 个脚本`, htmlOrder.length === order.length, JSON.stringify(htmlOrder));
 eq('i18n.js 在最前（util.js 与 plugins.js 加载时就要取 I18n.T）', htmlOrder[0], 'js/i18n.js');
 eq('en.js 紧跟 i18n.js（它调用 I18n.register）', htmlOrder[1], 'js/lang/en.js');
 eq('util.js 排第三（其余模块依赖 U，但 U 自己也要用 I18n.T）', htmlOrder[2], 'js/util.js');
@@ -328,7 +328,7 @@ ok('index.html 的顺序与 LOAD 集合一致',
 }
 
 // 每个模块挂的全局名，必须和 app.js 里用的一致
-const GLOBALNAME = { 'js/util.js': 'U', 'js/i18n.js': 'I18n', 'js/cloze.js': 'Cloze', 'js/plugins.js': 'Plugins', 'js/store.js': 'DB', 'js/ai.js': 'AI' };
+const GLOBALNAME = { 'js/util.js': 'U', 'js/i18n.js': 'I18n', 'js/cloze.js': 'Cloze', 'js/plugins.js': 'Plugins', 'js/store.js': 'DB', 'js/game.js': 'Game', 'js/ai.js': 'AI' };
 for (const [rel, name] of Object.entries(GLOBALNAME)) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
   ok(`${rel} 挂载 global.${name}`, new RegExp(`global\\.${name}\\s*=`).test(src), '没找到挂载语句');
@@ -839,7 +839,10 @@ group('文案全覆盖（en.js 词典）');
   } catch (e) { /* 拿不到 BUILTIN 只会让检查更严，不会放水 */ }
   ok('内置插件的动态文案已纳入豁免集', dynKeys.size >= 10, 'size=' + dynKeys.size);
 
-  const orphans = [...dictKeys].filter((k) => !allLiterals.has(k) && !dynKeys.has(k));
+  // 单复数：I18n.count(n, ' 天') 在 n === 1 时会去查 ' 天#1'（英文要分单复数，中文不用）。
+  // 那个 '#1' 是运行时拼出来的，源码里不可能出现，所以只要 '<单位>' 有字面量就算它有人用。
+  const usedAsUnit = (k) => /#1$/.test(k) && allLiterals.has(k.replace(/#1$/, ''));
+  const orphans = [...dictKeys].filter((k) => !allLiterals.has(k) && !dynKeys.has(k) && !usedAsUnit(k));
   ok(`词典里没有用不到的孤儿条目（共 ${dictKeys.size} 条）`, orphans.length === 0,
     orphans.slice(0, 25).join('\n      '));
 }
