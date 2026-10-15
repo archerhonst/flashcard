@@ -103,7 +103,7 @@ const ctx = vm.createContext(sandbox);
 /* ---------------- 2. 按 index.html 的顺序加载 ---------------- */
 // i18n 必须排在 plugins.js 之前（后者在模块顶层就取 global.I18n.T），
 // en.js 必须排在 i18n.js 之后（它调用 I18n.register）。
-const ORDER = ['js/i18n.js', 'js/lang/en.js', 'js/util.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js'];
+const ORDER = ['js/i18n.js', 'js/lang/en.js', 'js/zip.js', 'js/util.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js'];
 for (const rel of ORDER) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
   try {
@@ -798,6 +798,7 @@ group('AI 传输层（原生桥 / fetch 回落）');
 
   checkPluginI18n();
   checkGrowth();
+  await checkBundle();
   finish();
 })().catch((e) => {
   // 这段是 async 的，抛异常会让整个文件中断、连汇总都打不出来。
@@ -805,6 +806,7 @@ group('AI 传输层（原生桥 / fetch 回落）');
   ok('AI 传输层用例未抛异常', false, (e && e.stack) || String(e));
   checkPluginI18n();
   checkGrowth();
+  checkBundle().catch(() => { });
   finish();
 });
 
@@ -1180,6 +1182,160 @@ function checkGrowth() {
     eq('没有 growth 字段的老备份照样能导入', threw, '');
 
     I18n.setLang(I18n.lang());
+  }
+}
+
+/* ---------------- zip 备份包 ---------------- */
+async function checkBundle() {
+  const zip = ctx.Zip, U = ctx.U, DB = ctx.DB, I18n = ctx.I18n;
+  const Game = ctx.Game;
+
+  group('zip：读写往返');
+  {
+    ok('Zip 已导出', !!zip && typeof zip.write === 'function' && typeof zip.read === 'function');
+    const files = [
+      { name: 'a.txt', data: '你好，world' },
+      { name: 'dir/b.json', data: JSON.stringify({ x: 1, s: '中文' }) },
+      { name: 'empty.txt', data: '' },
+      { name: 'bin.dat', data: new Uint8Array([0, 1, 2, 255]) }
+    ];
+    const bytes = zip.write(files);
+    eq('写出的是 Uint8Array', Object.prototype.toString.call(bytes), '[object Uint8Array]');
+    eq('带本地文件头签名 PK\\x03\\x04', bytes[0] + ',' + bytes[1], '80,75');
+    eq('带结尾标记 PK\\x05\\x06', bytes[bytes.length - 22] + ',' + bytes[bytes.length - 21], '80,75');
+    ok('相同的输入产生相同的字节（时间戳写死，便于比对）',
+      Buffer.compare(Buffer.from(zip.write(files)), Buffer.from(bytes)) === 0);
+    ok('空数组会被拒绝（zip 里至少要有一个文件）', (() => { try { zip.write([]); return false; } catch (e) { return /至少要有一个/.test(e.message); } })());
+
+    const entries = zip.read(bytes);
+    ok('read 返回 Promise', typeof entries.then === 'function');
+    const list = await entries;
+    eq('条目数一致', list.length, 4);
+    eq('文件名保序', list.map(e => e.name).join(','), 'a.txt,dir/b.json,empty.txt,bin.dat');
+    eq('中文内容 UTF-8 往返', zip.text(list[0].bytes), '你好，world');
+    eq('子目录里的 JSON 往返', JSON.parse(zip.text(list[1].bytes)).s, '中文');
+    eq('空文件往返', list[2].bytes.length, 0);
+    eq('二进制往返', Array.from(list[3].bytes).join(','), '0,1,2,255');
+    eq('base64 与字节对齐', zip.base64(list[3].bytes), Buffer.from([0, 1, 2, 255]).toString('base64'));
+    let zipErr = '';
+    try { await zip.read(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])); } catch (e) { zipErr = e.message; }
+    ok('读非 zip 会给出可读的报错', /不是一个 zip/.test(zipErr), zipErr);
+  }
+
+  group('备份包：内容与结构');
+  {
+    // 造一份有牌组/卡片/插件/CSS/成长的数据
+    const d = DB.createDeck({ name: '包测试', desc: '' });
+    DB.createCard({ deckId: d.id, type: 'basic', fields: { q: '包里的问题', a: '答' } });
+    const st = DB.getSettings();
+    st.ui = st.ui || {}; st.ui.customCss = 'body { --bg: #123; }';
+    DB.saveSettings(st);
+    const inst = ctx.Plugins.install({
+      id: 'x.bundle', name: '包插件', description: '给备份包用的', apiVersion: 1, mode: 'template',
+      fields: [{ key: 'q', label: '题干', type: 'textarea' }],
+      templates: { front: '{{{q}}}', back: '{{{q}}}' }
+    }, { overwrite: true });
+    ok('测试插件装上了（否则后面的计数断言会误报）', inst.ok === true, JSON.stringify(inst.errors || []));
+
+    const files = DB.exportBundle();
+    const byName = {};
+    files.forEach(f => { byName[f.name] = f.data; });
+    ok('导出返回数组且每项都有 name/data', Array.isArray(files) && files.every(f => typeof f.name === 'string' && typeof f.data === 'string'), JSON.stringify(files.map(f => f.name)));
+    ok('含 manifest.json', !!byName['manifest.json']);
+    ok('含 decks.json', !!byName['decks.json']);
+    ok('含 growth.json', !!byName['growth.json']);
+    ok('含 settings.json', !!byName['settings.json']);
+    ok('含 custom.css', byName['custom.css'] !== undefined);
+    ok('含 plugins/x.bundle.json', !!byName['plugins/x.bundle.json']);
+
+    const mf = JSON.parse(byName['manifest.json']);
+    eq('manifest 的 format', mf.format, 'flashcards-bundle');
+    eq('manifest 的 version', mf.version, 1);
+    eq('manifest 记下了牌组数', mf.counts.decks, DB.listDecks().length);
+    eq('manifest 记下了卡片数', mf.counts.cards, DB.listCards().length);
+    eq('manifest 记下了插件数', mf.counts.plugins, 1);
+
+    const dj = JSON.parse(byName['decks.json']);
+    eq('decks.json 的 format', dj.format, 'flashcards-decks');
+    ok('decks.json 里有牌组', Array.isArray(dj.decks) && dj.decks.length === DB.listDecks().length);
+    ok('decks.json 里有卡片', Array.isArray(dj.cards) && dj.cards.length === DB.listCards().length);
+
+    eq('custom.css 是原文', byName['custom.css'], 'body { --bg: #123; }');
+    eq('settings.json 里不再重复带一份 CSS（包内只留一个真相）',
+      JSON.parse(byName['settings.json']).ui.customCss, undefined);
+
+    const pl = JSON.parse(byName['plugins/x.bundle.json']);
+    eq('插件文件是插件的原始定义', pl.id, 'x.bundle');
+    eq('插件名保持原文（没被翻译层污染）', pl.name, '包插件');
+
+    ok('isBundle 认得自己导的包', DB.isBundle(byName));
+    ok('isBundle 不认得一个随便的 zip', !DB.isBundle({ 'readme.txt': 'hi' }));
+    ok('isBundle 也认只带 custom.css 的换肤包', DB.isBundle({ 'custom.css': 'body{}' }));
+    ok('isBundle 不会因为 manifest 坏掉就崩', DB.isBundle({ 'manifest.json': '{ 坏', 'custom.css': 'x' }));
+
+    // 真的打成 zip 再解开，走一遍完整的字节往返
+    const bytes = zip.write(files);
+    const list2 = await zip.read(bytes);
+    const got = {};
+    list2.forEach(e => { got[e.name] = zip.text(e.bytes); });
+    eq('打好的 zip 解出来文件数一致', Object.keys(got).length, files.length);
+    eq('zip 里的 decks.json 与导出的一致', got['decks.json'], byName['decks.json']);
+    eq('zip 里的 custom.css 与导出的一致', got['custom.css'], byName['custom.css']);
+  }
+
+  group('备份包：导入');
+  {
+    const before = { decks: DB.listDecks().length, cards: DB.listCards().length };
+    const cssPack = { 'manifest.json': JSON.stringify({ format: 'flashcards-bundle', version: 1 }),
+      'custom.css': '/* 换肤包 */ body { --primary: #f00; }' };
+    const r1 = DB.importBundle(cssPack, 'merge');
+    ok('只带 custom.css 的包能导入', !!r1 && r1.css === true);
+    eq('CSS 真的写回设置里了', DB.getSettings().ui.customCss, '/* 换肤包 */ body { --primary: #f00; }');
+    eq('只带 CSS 的包不动牌组数', DB.listDecks().length, before.decks);
+    eq('只带 CSS 的包不动卡片数', DB.listCards().length, before.cards);
+
+    // 合并导入：牌组改名重挂，卡片换新 id
+    const pack = {
+      'decks.json': JSON.stringify({ format: 'flashcards-decks', version: 1,
+        decks: [{ id: 'd1', name: '导入的牌组', desc: '' }],
+        cards: [{ id: 'c1', deckId: 'd1', type: 'basic', fields: { q: '导入题', a: '答' } }] }),
+      'growth.json': JSON.stringify({ format: 'flashcards-growth', version: 1,
+        profile: { xp: 99999, reviews: 1, created: 1 }, badges: [], mastered: [], stats: {} })
+    };
+    const xpBefore = Game.profile().xp;
+    const r2 = DB.importBundle(pack, 'merge');
+    eq('合并导入了 1 个牌组（计入总数）', r2.decks, before.decks + 1);
+    eq('合并导入了 1 张卡片（计入总数）', r2.cards, before.cards + 1);
+    ok('导入的牌组真的在库里', DB.listDecks().some(d => d.name === '导入的牌组'));
+    const newCards = DB.listCards().filter(c => c.fields && c.fields.q === '导入题');
+    ok('合并导入的卡片进了库', newCards.length === 1, '找到 ' + newCards.length + ' 张');
+    ok('导入的卡片挂在了一个真实存在的牌组上（不会指向不存在的 d1）',
+      newCards.length === 1 && !!DB.getDeck(newCards[0].deckId),
+      newCards.length ? String(newCards[0].deckId) : '没找到卡片');
+    ok('成长数据被并进来了（经验取较大值，只增不减）', Game.profile().xp >= xpBefore);
+    ok('合并后旧数据没被清掉', DB.listDecks().length >= before.decks + 1);
+
+    // 替换导入
+    const r3 = DB.importBundle(pack, 'replace');
+    eq('替换导入后牌组只剩 1 个', r3.decks, 1);
+    eq('替换导入后卡片只剩 1 张', r3.cards, 1);
+    eq('替换导入后牌组名是包里的', DB.listDecks()[0].name, '导入的牌组');
+
+    // 坏包不该污染现有数据
+    const keepDecks = DB.listDecks().length;
+    const r4 = DB.importBundle({ 'decks.json': '{ 这不是 JSON', 'custom.css': 'ok' }, 'merge');
+    ok('坏掉的 decks.json 记进 skipped', r4.skipped.indexOf('decks.json') >= 0);
+    eq('坏包不影响已有牌组', DB.listDecks().length, keepDecks);
+    eq('坏包里的好文件（custom.css）照样吃到', DB.getSettings().ui.customCss, 'ok');
+
+    const keep2 = DB.listDecks().length;
+    const r5 = DB.importBundle({ 'decks.json': '[1,2,3]' }, 'replace');
+    ok('结构不对的 decks.json（是个数组而不是对象）记进 skipped', r5.skipped.indexOf('decks.json') >= 0);
+    eq('结构不对的 decks.json 不会把现有牌组清掉', DB.listDecks().length, keep2);
+    eq('结构不对时不能声称导入了牌组', r5.decks, 0);
+
+    // 收尾
+    ctx.Plugins.uninstall && (() => { try { ctx.Plugins.uninstall('x.bundle'); } catch (e) { } })();
   }
 }
 

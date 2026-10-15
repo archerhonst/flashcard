@@ -152,9 +152,29 @@
   }
 
   /* ---------------- 文件 ---------------- */
-  /* 优先走 APK 容器的原生保存通道。
-     Android WebView 不支持 blob: + <a download> 的下载，必须走 JS 桥；
-     浏览器里没有这个桥，自动回落到标准 blob 下载。 */
+  /* 把文件交给原生侧保存，按可用性依次尝试三条通道：
+   *
+   *   1. FlashCardsNative.saveFileBase64 —— 本仓库 android/ 那套壳（能写二进制）
+   *   2. Android.downloadFileFromBase64  —— HopWeb 打包器的壳（能写二进制）
+   *   3. FlashCardsNative.saveFile       —— 老壳，只吃文本
+   *
+   * 为什么非要走桥：Android WebView **不支持** blob: + <a download>，
+   * 页面里点「导出」会安静地什么都不发生。这就是以前导出「用不了」的原因。
+   * 浏览器 / PWA 里没有这些桥，自动回落到标准下载。 */
+  function nativeSaveBase64(filename, b64, mime) {
+    var N = global.FlashCardsNative;
+    if (N && typeof N.saveFileBase64 === 'function') {
+      try { if (N.saveFileBase64(filename, b64, mime || 'application/octet-stream') !== false) return true; }
+      catch (e) { /* 换下一条通道 */ }
+    }
+    var A = global.Android;
+    if (A && typeof A.downloadFileFromBase64 === 'function') {
+      try { A.downloadFileFromBase64(b64); return true; }
+      catch (e) { /* 换下一条通道 */ }
+    }
+    return false;
+  }
+
   function nativeSave(filename, text, mime) {
     try {
       var N = global.FlashCardsNative;
@@ -165,15 +185,61 @@
     return false;
   }
 
-  function download(filename, text, mime) {
-    if (nativeSave(filename, text, mime)) return;
-    var blob = new Blob([text], { type: (mime || 'application/json') + ';charset=utf-8' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
+  function browserDownload(filename, blob) {
+    var url = URL.createObjectURL(blob);
+    var a = el('a', { href: url, download: filename });
     document.body.appendChild(a);
     a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+
+  /**
+   * 保存一段二进制。
+   * @param {string} filename
+   * @param {Uint8Array} bytes
+   * @param {string} mime
+   * @returns {boolean} 是否走了原生通道
+   */
+  function downloadBytes(filename, bytes, mime) {
+    var type = mime || 'application/octet-stream';
+    if (nativeSaveBase64(filename, global.Zip.base64(bytes), type)) return true;
+    browserDownload(filename, new Blob([bytes], { type: type }));
+    return false;
+  }
+
+  function download(filename, text, mime) {
+    if (nativeSave(filename, text, mime)) return;
+    // 只吃文本的老壳走不了二进制；把文本按 UTF-8 编成字节，统一交给桥
+    if (global.Zip && nativeSaveBase64(filename, global.Zip.base64(global.Zip.utf8(text)), mime)) return;
+    browserDownload(filename, new Blob([String(text)], { type: (mime || 'application/json') + ';charset=utf-8' }));
+  }
+
+  function readFile(file, as) {
+    return new Promise(function (resolve) {
+      var r = new FileReader();
+      r.onload = function () { resolve(r.result); };
+      r.onerror = function () { resolve(null); };
+      if (as === 'buffer') r.readAsArrayBuffer(file); else r.readAsText(file, 'utf-8');
+    });
+  }
+
+  /** 选一个文件，读成二进制（导入 zip 用） */
+  function pickFileBinary(accept) {
+    return new Promise(function (resolve) {
+      var inp = el('input', { type: 'file', accept: accept || '.zip,application/zip' });
+      inp.style.display = 'none';
+      document.body.appendChild(inp);
+      inp.addEventListener('change', function () {
+        var f = inp.files && inp.files[0];
+        if (!f) { resolve(null); inp.remove(); return; }
+        readFile(f, 'buffer').then(function (ab) {
+          inp.remove();
+          if (!ab) { resolve(null); return; }
+          resolve({ name: f.name, bytes: new Uint8Array(ab) });
+        });
+      });
+      inp.click();
+    });
   }
 
   function pickFile(accept) {
@@ -592,7 +658,7 @@
     $: $, $$: $$, el: el, esc: esc, nl2br: nl2br, uid: uid, deepClone: deepClone,
     debounce: debounce, now: now, DAY: DAY, fmtTime: fmtTime, fmtDue: fmtDue, startOfDay: startOfDay,
     toast: toast, confirmBox: confirmBox, promptBox: promptBox,
-    download: download, pickFile: pickFile, copyText: copyText,
+    download: download, downloadBytes: downloadBytes, pickFile: pickFile, pickFileBinary: pickFileBinary, copyText: copyText,
     Store: Store, NS: NS,
     renderTemplate: renderTemplate, registerFilter: registerFilter, FILTERS: FILTERS,
     clamp: clamp, parseNum: parseNum, uniq: uniq,

@@ -394,14 +394,16 @@
     '</b><span>卡片</span></div>': '</b><span>Cards</span></div>',
     '</b><span>复习记录</span></div>': '</b><span>Review logs</span></div>',
     '</b><span>存储项</span></div>': '</b><span>Storage keys</span></div>',
-    '<button class="btn btn--sm" data-act="data:export">导出全部备份</button>':
-      '<button class="btn btn--sm" data-act="data:export">Export all</button>',
-    '<button class="btn btn--sm" data-act="data:import">导入备份</button>':
-      '<button class="btn btn--sm" data-act="data:import">Import backup</button>',
+    '<button class="btn btn--sm" data-act="data:export">导出备份 (.zip)</button>':
+      '<button class="btn btn--sm" data-act="data:export">Export backup (.zip)</button>',
+    '<button class="btn btn--sm" data-act="data:import">导入备份 (.zip)</button>':
+      '<button class="btn btn--sm" data-act="data:import">Import backup (.zip)</button>',
     '<button class="btn btn--sm btn--danger" data-act="data:clear">清空所有数据</button>':
       '<button class="btn btn--sm btn--danger" data-act="data:clear">Erase all data</button>',
-    '<div class="muted" style="margin-top:10px">数据保存在本机 localStorage，卸载 App 或清理数据会丢失，建议定期导出备份。</div>':
-      '<div class="muted" style="margin-top:10px">Data is stored in this device’s localStorage. Uninstalling the app or clearing its data wipes it — export a backup regularly.</div>',
+    '<div class="muted" style="margin-top:10px">备份是一个普通的 .zip，里面有牌组与卡片、成长数据、设置、自定义 CSS 和已安装的插件——单拎出其中任何一个文件改完再打回去也是合法备份。</div>':
+      '<div class="muted" style="margin-top:10px">A backup is an ordinary .zip holding your decks and cards, growth data, settings, custom CSS and installed plugins — pull any one file out, edit it, and zip it back up; it stays a valid backup.</div>',
+    '<div class="muted" style="margin-top:6px">数据保存在本机 localStorage，卸载 App 或清理数据会丢失，建议定期导出备份。</div>':
+      '<div class="muted" style="margin-top:6px">Data is stored in this device’s localStorage. Uninstalling the app or clearing its data wipes it — export a backup regularly.</div>',
     '<div class="card-panel"><div class="section-title">🛟 自动快照</div>':
       '<div class="card-panel"><div class="section-title">🛟 Auto snapshots</div>',
     '<div id="snap-list"><div class="muted">正在读取…</div></div>':
@@ -449,7 +451,24 @@
       'After deleting, this card type can no longer be used for new or edited cards (existing cards are kept). Continue?',
     '自定义样式已应用': 'Custom CSS applied',
     '已清空自定义样式': 'Custom CSS cleared',
-    '已导出': 'Exported',
+    '导出失败：': 'Export failed: ',
+    '打包失败：': 'Could not build the zip: ',
+    '已导出备份（{n} 个文件）': 'Backup exported ({n} files)',
+    '读取 zip 失败：': 'Could not read the zip: ',
+    '这个 zip 里没有本 App 的备份文件': 'This zip holds no backup for this app',
+    '这个包里是：': 'This backup contains: ',
+    '未知内容': 'unknown contents',
+    '牌组 {d} 个 · 卡片 {c} 张 · 插件 {p} 个': '{d} decks · {c} cards · {p} plugins',
+    '已导入：': 'Imported: ',
+    '没有可导入的内容': 'nothing to import',
+    '跳过了 {n} 项：': 'Skipped {n}: ',
+    '{n} 个牌组': '{n} decks',
+    '{n} 张卡片': '{n} cards',
+    '{n} 个插件': '{n} plugins',
+    '成长数据': 'growth data',
+    '自定义 CSS': 'custom CSS',
+    '、': ', ',
+    '。': '. ',
     '手动备份': 'Manual snapshot',
     '已备份一份快照': 'Snapshot saved',
     '这台设备不支持本地快照': 'This device does not support local snapshots',

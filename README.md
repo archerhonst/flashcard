@@ -9,8 +9,8 @@
 
 [![无需构建](https://img.shields.io/badge/build-none%20needed-blue?style=flat-square)](#快速开始)
 [![零依赖](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)](#文件结构)
-[![行为测试](https://img.shields.io/badge/selftest-484%20passing-brightgreen?style=flat-square)](#自检)
-[![静态检查](https://img.shields.io/badge/staticcheck-178%20passing-brightgreen?style=flat-square)](#自检)
+[![行为测试](https://img.shields.io/badge/selftest-548%20passing-brightgreen?style=flat-square)](#自检)
+[![静态检查](https://img.shields.io/badge/staticcheck-189%20passing-brightgreen?style=flat-square)](#自检)
 [![界面语言](https://img.shields.io/badge/i18n-简体中文%20%7C%20English-orange?style=flat-square)](#界面语言)
 
 <p>
@@ -166,7 +166,29 @@ python3 -m http.server 8000     # 然后浏览器打开 http://localhost:8000
   「恢复到这份」可整体回滚。恢复前还会先自动备份当前状态，回滚错了还能再救回来
 - **CSV / TSV 导入导出**：和 Excel、Anki 表格互通。分隔符自动识别（逗号 / Tab），
   表头按字段 key 或字段标签匹配，对不上的列直接忽略；含逗号、换行、双引号的单元格都能正确解析
-- 完整备份 / 恢复（导出 JSON）、单牌组导出
+- **完整备份 / 恢复就是一个普通 `.zip`**（见下）、单牌组导出
+
+#### 备份包（zip）
+
+「设置 → 导出备份」导出的是一只标准 `.zip`，不是把一切都塞进一个 JSON。
+理由很实际：一份备份里装着四种互不相干的东西，塞在一起之后谁也没法单独看、
+单独改。拆开之后它就是个普通压缩包，用任何解压工具都能打开：
+
+```
+flashcards-backup-2026-10-15.zip
+├── manifest.json          这份包是什么、什么时候导的、各有多少
+├── decks.json             卡组 + 卡片（含每张卡的掌握度与调度状态）
+├── growth.json            角色成长：经验 / 等级 / 徽章 / 连续天数 / 每日流水
+├── settings.json          设置（不含自定义 CSS）
+├── custom.css             自定义 CSS 原文
+└── plugins/<id>.json      每个已安装的插件
+```
+
+导入时每一块都是「有就吃、没有就跳过」，单个文件写坏了也只跳过它、不影响整包。
+所以只往 zip 里放一个 `custom.css` 就是一只换肤包。
+导入仍分「合并」与「替换」：合并会保留现有数据、撞 id 的牌组自动改名、
+卡片换新 id；成长数据在合并时**经验取两边较大值、徽章取并集**，从不把等级改低。
+老的 `.json` 备份也照样能导入（先导入的一律按旧格式解析）。
 
 ### 成长体系
 
@@ -389,8 +411,8 @@ node tools/check-apk-shell.js    # 可选：检查打包器里那份网页副本
 全绿的样子：
 
 ```
-✓ 全部通过：484 项检查
-✓ 静态检查全部通过：178 项
+✓ 全部通过：548 项检查
+✓ 静态检查全部通过：189 项
 ```
 
 它们的存在理由是：这个项目**没有构建步骤**，也没有测试框架，
@@ -420,7 +442,8 @@ flashcard/
 │   ├── i18n.js             # 界面语言：语言清单、词典注册、T() 取词、切换与持久化
 │   ├── lang/
 │   │   └── en.js           # 英文词典（键 = 中文原文，值 = 译文）
-│   ├── util.js             # 工具：DOM、转义、模板引擎（Mustache 子集 + 过滤器）、localStorage 封装
+│   ├── zip.js              # 极简 zip 读写（只用 STORE，不压缩；配套原生桥写二进制）
+│   ├── util.js             # 工具：DOM、转义、模板引擎（Mustache 子集 + 过滤器）、localStorage 封装、文件保存与读取
 │   ├── store.js            # 数据层：牌组/卡片/日志/SM-2 调度/掌握度与休眠/导入导出
 │   ├── game.js             # 成长体系：经验与等级、称号、徽章、连续天数、每日每周挑战、热力图、遗忘曲线、成长 JSON
 │   ├── cloze.js            # 挖空引擎：解析、明文↔标记双向映射、点词挖空、本地智能挖空、渲染、拆卡
@@ -430,8 +453,8 @@ flashcard/
 ├── plugins/                # 示例插件（都是可以直接导入的 .json）
 ├── docs/                   # README 用的截图
 ├── tools/                  # 自检脚本
-│   ├── selftest.js         # 把核心逻辑加载进 Node，跑 484 项行为测试
-│   ├── staticcheck.js      # 不执行代码，静态扫 178 项接缝 / DOM id / 资源 / 文案全覆盖
+│   ├── selftest.js         # 把核心逻辑加载进 Node，跑 548 项行为测试
+│   ├── staticcheck.js      # 不执行代码，静态扫 189 项接缝 / DOM id / 资源 / 文案全覆盖
 │   └── check-apk-shell.js  # 可选：比对打包器里的网页副本与本体
 ├── 插件开发文档.md          # ★ 插件 API 完整参考
 └── android/                # APK 壳工程源码（Kotlin + WebView，供改造参考）
@@ -445,7 +468,7 @@ flashcard/
 
 ## 已知边界
 
-- **数据只在 `localStorage`**：没有云同步，换设备靠导出 / 导入 JSON。
+- **数据只在 `localStorage`**：没有云同步，换设备靠导出 / 导入那只 `.zip` 备份包。
 - AI 返回的 JSON 不做严格校验，模型胡说就会存进胡说 —— 批量生成后建议抽查。
 - 挖空提示文字不能包含 `::`。
 - 插件模板是 Mustache 子集：不支持自定义函数、`{{> partial}}`、循环变量别名。

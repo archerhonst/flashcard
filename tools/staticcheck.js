@@ -4,7 +4,7 @@
  *   node tools/staticcheck.js
  *
  * selftest.js 跑的是「运行时逻辑」，这个脚本查的是「接缝」：
- *   1) 跨模块调用（U.xxx / Cloze.xxx / Plugins.xxx / DB.xxx / AI.xxx）
+ *   1) 跨模块调用（U.xxx / Zip.xxx / Cloze.xxx / Plugins.xxx / DB.xxx / AI.xxx / Game.xxx）
  *      引用的成员是否真的存在于对方的导出表里 —— 拼错名字最常在这里翻车；
  *   2) app.js 里 $('#xxx') / getElementById('xxx') 用到的 id，
  *      是否在 index.html 或 app.js 自己的模板里被定义过；
@@ -18,7 +18,7 @@ const vm = require('vm');
 
 const ROOT = path.resolve(__dirname, '..');
 const SRC_DIRS = ['js'];
-const ALL = ['index.html', 'js/util.js', 'js/i18n.js', 'js/lang/en.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js', 'js/app.js'];
+const ALL = ['index.html', 'js/util.js', 'js/i18n.js', 'js/lang/en.js', 'js/zip.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js', 'js/app.js'];
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -62,6 +62,10 @@ const sb = {
   atob: (s) => Buffer.from(s, 'base64').toString('binary'),
   btoa: (s) => Buffer.from(s, 'binary').toString('base64'),
   URL: globalThis.URL, TextEncoder: globalThis.TextEncoder, TextDecoder: globalThis.TextDecoder,
+  Uint8Array, Uint16Array, Uint32Array, Int8Array, Int16Array, Int32Array, Float64Array,
+  ArrayBuffer, DataView, Blob: globalThis.Blob, Response: globalThis.Response,
+  DecompressionStream: globalThis.DecompressionStream || undefined,
+  escape, unescape,
   AbortController: globalThis.AbortController, fetch: globalThis.fetch,
   navigator: { language: 'zh-CN', userAgent: 'node', onLine: true },
   location: { href: 'https://x/y', protocol: 'https:', origin: 'https://x', reload() {} },
@@ -79,14 +83,14 @@ const ctx = vm.createContext(sb);
 
 group('加载逻辑模块');
 // i18n 必须最先（plugins.js 在顶层就取 global.I18n.T），en.js 紧随其后（调用 I18n.register）
-const LOAD = ['js/i18n.js', 'js/lang/en.js', 'js/util.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js'];
+const LOAD = ['js/i18n.js', 'js/lang/en.js', 'js/zip.js', 'js/util.js', 'js/cloze.js', 'js/plugins.js', 'js/store.js', 'js/game.js', 'js/ai.js'];
 for (const rel of LOAD) {
   try { vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), ctx, { filename: rel }); ok(`加载 ${rel}`, true); }
   catch (e) { ok(`加载 ${rel}`, false, e.message); }
 }
 
 const EXPORTS = {
-  U: ctx.U, Cloze: ctx.Cloze, Plugins: ctx.Plugins, DB: ctx.DB, AI: ctx.AI,
+  U: ctx.U, Zip: ctx.Zip, Cloze: ctx.Cloze, Plugins: ctx.Plugins, DB: ctx.DB, AI: ctx.AI, Game: ctx.Game,
 };
 const EXPORT_KEYS = {};
 for (const [n, o] of Object.entries(EXPORTS)) {
@@ -95,10 +99,12 @@ for (const [n, o] of Object.entries(EXPORTS)) {
 }
 // _seg 之类的内部缓存不该被外部调用；模块间互相引用的名字必须真实存在
 ok('U 导出表非空', EXPORT_KEYS.U.size > 20, `size=${EXPORT_KEYS.U.size}`);
+ok('Zip 导出表非空', EXPORT_KEYS.Zip.size > 3, `size=${EXPORT_KEYS.Zip.size}`);
 ok('Cloze 导出表非空', EXPORT_KEYS.Cloze.size > 10, `size=${EXPORT_KEYS.Cloze.size}`);
 ok('Plugins 导出表非空', EXPORT_KEYS.Plugins.size > 10, `size=${EXPORT_KEYS.Plugins.size}`);
 ok('DB 导出表非空', EXPORT_KEYS.DB.size > 20, `size=${EXPORT_KEYS.DB.size}`);
 ok('AI 导出表非空', EXPORT_KEYS.AI.size > 5, `size=${EXPORT_KEYS.AI.size}`);
+ok('Game 导出表非空', EXPORT_KEYS.Game.size > 20, `size=${EXPORT_KEYS.Game.size}`);
 
 /* ---------------- 2. 扫描跨模块成员引用 ---------------- */
 group('跨模块调用拼写');
@@ -111,7 +117,7 @@ const unknown = [];
 for (const rel of files) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
   // 去掉注释和字符串里明显不是调用的部分：直接正则扫 `Name.member`
-  const re = /\b(U|Cloze|Plugins|DB|AI)\.([A-Za-z_$][A-Za-z0-9_$]*)/g;
+  const re = /\b(U|Zip|Cloze|Plugins|DB|AI|Game)\.([A-Za-z_$][A-Za-z0-9_$]*)/g;
   let m;
   while ((m = re.exec(src)) !== null) {
     const mod = m[1], member = m[2];
@@ -217,6 +223,9 @@ const BUILTIN = new Set(['if', 'for', 'while', 'switch', 'catch', 'function', 'r
   'require', 'console', 'await', 'new', 'do', 'else', 'try', 'delete', 'void', 'in', 'of', 'yield',
   // 宿主环境提供的全局
   'fetch', 'AbortController', 'Blob', 'FileReader', 'File', 'URL', 'Intl', 'atob', 'btoa',
+  'Uint8Array', 'Uint16Array', 'Uint32Array', 'Int8Array', 'Int16Array', 'Int32Array',
+  'Float32Array', 'Float64Array', 'ArrayBuffer', 'DataView', 'TextEncoder', 'TextDecoder',
+  'Response', 'DecompressionStream', 'escape', 'unescape',
   'resolve', 'reject', 'executor', 'then', 'catch', 'finally', 'call', 'apply', 'bind']);
 
 for (const rel of files) {
@@ -296,7 +305,7 @@ for (const rel of LOAD.concat(['js/app.js'])) {
 }
 // 脚本顺序：直接读 index.html 的真实顺序，而不是假设一个顺序。
 // util.js 必须最先（所有模块都依赖 U），app.js 必须最后（依赖前面全部）。
-const order = ['js/i18n.js', 'js/lang/en.js', 'js/util.js', 'js/store.js', 'js/game.js', 'js/cloze.js', 'js/plugins.js', 'js/ai.js', 'js/app.js'];
+const order = ['js/i18n.js', 'js/lang/en.js', 'js/zip.js', 'js/util.js', 'js/store.js', 'js/game.js', 'js/cloze.js', 'js/plugins.js', 'js/ai.js', 'js/app.js'];
 const htmlOrder = [];
 {
   const re = /<script\s+src="([^"]+)"/g;
@@ -306,7 +315,8 @@ const htmlOrder = [];
 ok(`index.html 按顺序引用了全部 ${order.length} 个脚本`, htmlOrder.length === order.length, JSON.stringify(htmlOrder));
 eq('i18n.js 在最前（util.js 与 plugins.js 加载时就要取 I18n.T）', htmlOrder[0], 'js/i18n.js');
 eq('en.js 紧跟 i18n.js（它调用 I18n.register）', htmlOrder[1], 'js/lang/en.js');
-eq('util.js 排第三（其余模块依赖 U，但 U 自己也要用 I18n.T）', htmlOrder[2], 'js/util.js');
+eq('zip.js 排第三（util.js 的 downloadBytes 要用 Zip.base64，必须先加载）', htmlOrder[2], 'js/zip.js');
+eq('util.js 排第四（其余模块依赖 U，但 U 自己也要用 I18n.T）', htmlOrder[3], 'js/util.js');
 eq('app.js 在最后（依赖前面全部）', htmlOrder[htmlOrder.length - 1], 'js/app.js');
 ok('index.html 的顺序与 LOAD 集合一致',
   JSON.stringify(htmlOrder.slice().sort()) === JSON.stringify(order.slice().sort()),
@@ -328,7 +338,7 @@ ok('index.html 的顺序与 LOAD 集合一致',
 }
 
 // 每个模块挂的全局名，必须和 app.js 里用的一致
-const GLOBALNAME = { 'js/util.js': 'U', 'js/i18n.js': 'I18n', 'js/cloze.js': 'Cloze', 'js/plugins.js': 'Plugins', 'js/store.js': 'DB', 'js/game.js': 'Game', 'js/ai.js': 'AI' };
+const GLOBALNAME = { 'js/util.js': 'U', 'js/i18n.js': 'I18n', 'js/zip.js': 'Zip', 'js/cloze.js': 'Cloze', 'js/plugins.js': 'Plugins', 'js/store.js': 'DB', 'js/game.js': 'Game', 'js/ai.js': 'AI' };
 for (const [rel, name] of Object.entries(GLOBALNAME)) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
   ok(`${rel} 挂载 global.${name}`, new RegExp(`global\\.${name}\\s*=`).test(src), '没找到挂载语句');

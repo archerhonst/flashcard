@@ -526,30 +526,39 @@
     };
   }
 
-  function importAll(data, mode) {
-    // mode: 'merge' | 'replace'
-    if (!data || data.format !== 'flashcards-backup') throw new Error('不是有效的备份文件（缺少 format 字段）');
+  /** 把 decks/cards 落进当前状态。
+   *  merge = 保留现有数据，撞 id 的牌组改个名再挂上去，卡片一律换新 id（避免覆盖别人的进度）。 */
+  function applyDecksCards(decks, cards, mode) {
     if (mode === 'replace') {
-      state.decks = data.decks || [];
-      state.cards = data.cards || [];
-      if (data.settings) state.settings = mergeDeep(DEFAULT_SETTINGS, data.settings);
+      state.decks = decks || [];
+      state.cards = cards || [];
     } else {
       var deckIdMap = {};
-      (data.decks || []).forEach(function (d) {
+      (decks || []).forEach(function (d) {
         var nd = U.deepClone(d);
         var old = nd.id;
         if (getDeck(nd.id)) { nd.id = U.uid('deck'); nd.name = nd.name + ' (导入)'; }
         deckIdMap[old] = nd.id;
         state.decks.push(nd);
       });
-      (data.cards || []).forEach(function (c) {
+      (cards || []).forEach(function (c) {
         var nc = U.deepClone(c);
         nc.id = U.uid('card');
         nc.deckId = deckIdMap[nc.deckId] !== undefined ? deckIdMap[nc.deckId] : nc.deckId;
         state.cards.push(nc);
       });
     }
-    persist('decks'); persist('cards'); persist('settings');
+    persist('decks'); persist('cards');
+  }
+
+  function importAll(data, mode) {
+    // mode: 'merge' | 'replace'
+    if (!data || data.format !== 'flashcards-backup') throw new Error('不是有效的备份文件（缺少 format 字段）');
+    applyDecksCards(data.decks, data.cards, mode);
+    if (mode === 'replace' && data.settings) {
+      state.settings = mergeDeep(DEFAULT_SETTINGS, data.settings);
+      persist('settings');
+    }
     // 成长数据并进来。merge 模式下经验取两边较大值、徽章取并集——
     // 从不在合并时把对方的等级调低，这是这个体系「只加不减」的一部分。
     if (data.growth && global.Game) {
@@ -557,6 +566,129 @@
       catch (e) { /* 成长数据坏了不该让整份备份导入失败 */ }
     }
     return { decks: state.decks.length, cards: state.cards.length };
+  }
+
+  /* ============================================================
+   * zip 备份包
+   *
+   * 为什么从「一个大 JSON」换成 zip：一份备份里其实装着四种互相独立的东西
+   * （卡组数据、成长数据、设置、插件），塞进一个 JSON 之后谁也没法单独看、
+   * 单独改。换成 zip 之后它就是一个普通压缩包，用任何解压工具都能打开：
+   *
+   *   flashcards-backup-2026-10-15.zip
+   *   ├── manifest.json          这份包是什么、什么时候导的、各有多少
+   *   ├── decks.json             卡组 + 卡片（含每张卡的掌握度和调度状态）
+   *   ├── growth.json            角色成长：经验/等级/徽章/连续天数/每日流水
+   *   ├── settings.json          设置（不含自定义 CSS）
+   *   ├── custom.css             自定义 CSS 原文（可以直接编辑再打回去）
+   *   └── plugins/<id>.json      每个已安装的插件
+   *
+   * 导入时每一块都是「有就吃、没有就跳过」，所以只放一个 custom.css
+   * 进去也能当换肤包用。
+   * ============================================================ */
+  var BUNDLE_FORMAT = 'flashcards-bundle';
+
+  function exportBundle() {
+    var files = [];
+    var plugins = U.Store.get(KEYS.plugins, []) || [];
+    var settings = U.deepClone(state.settings || {});
+    var css = (settings.ui && settings.ui.customCss) || '';
+    // 设置里不再重复带一份 CSS：包内出现两个「真相」时没人知道该信哪个
+    if (settings.ui) delete settings.ui.customCss;
+
+    files.push({
+      name: 'manifest.json',
+      data: JSON.stringify({
+        format: BUNDLE_FORMAT, version: 1,
+        app: '闪卡 · FlashCards',
+        exportedAt: new Date().toISOString(),
+        counts: { decks: state.decks.length, cards: state.cards.length, plugins: plugins.length }
+      }, null, 2)
+    });
+    files.push({
+      name: 'decks.json',
+      data: JSON.stringify({ format: 'flashcards-decks', version: 1, decks: state.decks, cards: state.cards }, null, 2)
+    });
+    files.push({ name: 'settings.json', data: JSON.stringify(settings, null, 2) });
+    files.push({ name: 'custom.css', data: css });
+    if (global.Game) {
+      files.push({ name: 'growth.json', data: JSON.stringify(global.Game.exportJSON({ includeCards: false }), null, 2) });
+    }
+    plugins.forEach(function (p) {
+      var id = String((p && p.id) || '').replace(/[^A-Za-z0-9._-]/g, '_') || 'plugin';
+      files.push({ name: 'plugins/' + id + '.json', data: JSON.stringify(p, null, 2) });
+    });
+    return files;
+  }
+
+  /** 判断一份 zip 里是不是本 App 的备份包（认不出就别乱导） */
+  function isBundle(files) {
+    if (files['manifest.json']) {
+      try {
+        if (JSON.parse(files['manifest.json']).format === BUNDLE_FORMAT) return true;
+      } catch (e) { /* manifest 坏了不算数，继续看有没有约定文件名 */ }
+    }
+    // 没有（或读不出）manifest 也认：只要出现这几个约定文件名之一，就当是包。
+    // 这样「只放一个 custom.css 进去」的换肤包也能导入。
+    return ['decks.json', 'growth.json', 'custom.css', 'settings.json'].some(function (n) {
+      return files[n] !== undefined;
+    });
+  }
+
+  function importBundle(files, mode) {
+    var has = function (n) { return Object.prototype.hasOwnProperty.call(files, n); };
+    var res = { decks: 0, cards: 0, plugins: 0, settings: false, css: false, growth: false, skipped: [] };
+    // 单个文件坏掉只跳过它，不让整包导入失败——用户手里的包可能是手改过的
+    var parse = function (n) {
+      if (!has(n) || files[n] === '' || files[n] === null) return null;
+      try { return JSON.parse(files[n]); }
+      catch (e) { res.skipped.push(n); return null; }
+    };
+
+    var decksData = parse('decks.json');
+    if (decksData && Array.isArray(decksData.decks)) {
+      applyDecksCards(decksData.decks, decksData.cards, mode);
+      res.decks = state.decks.length;
+      res.cards = state.cards.length;
+    } else {
+      res.skipped.push('decks.json');
+    }
+
+    var st = parse('settings.json');
+    var css = has('custom.css') ? files['custom.css'] : null;
+    if (st || css !== null) {
+      if (mode === 'replace') {
+        state.settings = st ? mergeDeep(DEFAULT_SETTINGS, st) : U.deepClone(DEFAULT_SETTINGS);
+      } else if (st) {
+        state.settings = mergeDeep(state.settings, st);
+      }
+      if (css !== null) {
+        if (!state.settings.ui) state.settings.ui = {};
+        state.settings.ui.customCss = css;
+        res.css = true;
+      }
+      persist('settings');
+      res.settings = true;
+    }
+
+    var g = parse('growth.json');
+    if (g && global.Game) {
+      try { global.Game.importJSON(g, mode === 'replace' ? 'replace' : 'merge'); res.growth = true; }
+      catch (e) { res.skipped.push('growth.json'); }
+    }
+
+    Object.keys(files).forEach(function (n) {
+      if (!/^plugins\/[^/]+\.json$/.test(n)) return;
+      if (!global.Plugins) return;
+      var p = parse(n);
+      if (!p) return;
+      try {
+        var r = global.Plugins.install(p, { overwrite: true });
+        if (r && r.ok) res.plugins++; else res.skipped.push(n);
+      } catch (e) { res.skipped.push(n); }
+    });
+
+    return res;
   }
 
   function exportDeck(deckId) {
@@ -590,6 +722,7 @@
     dueCards: dueCards, deckStats: deckStats, globalStats: globalStats,
     getSettings: getSettings, saveSettings: saveSettings, resetSettings: resetSettings,
     exportAll: exportAll, importAll: importAll, exportDeck: exportDeck, clearAll: clearAll,
+    exportBundle: exportBundle, importBundle: importBundle, isBundle: isBundle, BUNDLE_FORMAT: BUNDLE_FORMAT,
     snapshotSave: snapshotSave, snapshotList: snapshotList, snapshotRestore: snapshotRestore,
     snapshotClear: snapshotClear, snapshotPrune: snapshotPrune, snapshotOnBoot: snapshotOnBoot,
     snapshotSupported: function () { return !snapUnsupported(); },

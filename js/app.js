@@ -9,6 +9,7 @@
   var T = global.I18n.T;
   var I18n = global.I18n;
   var Game = global.Game;
+  var Zip = global.Zip;
 
   var App = {
     route: 'study',
@@ -1560,11 +1561,12 @@
       '<div class="stat"><b>' + U.Store.keys().length + T('</b><span>存储项</span></div>') +
       '</div>' +
       '<div class="row row--wrap" style="gap:8px">' +
-      T('<button class="btn btn--sm" data-act="data:export">导出全部备份</button>') +
-      T('<button class="btn btn--sm" data-act="data:import">导入备份</button>') +
+      T('<button class="btn btn--sm" data-act="data:export">导出备份 (.zip)</button>') +
+      T('<button class="btn btn--sm" data-act="data:import">导入备份 (.zip)</button>') +
       T('<button class="btn btn--sm btn--danger" data-act="data:clear">清空所有数据</button>') +
       '</div>' +
-      T('<div class="muted" style="margin-top:10px">数据保存在本机 localStorage，卸载 App 或清理数据会丢失，建议定期导出备份。</div>') +
+      T('<div class="muted" style="margin-top:10px">备份是一个普通的 .zip，里面有牌组与卡片、成长数据、设置、自定义 CSS 和已安装的插件——单拎出其中任何一个文件改完再打回去也是合法备份。</div>') +
+      T('<div class="muted" style="margin-top:6px">数据保存在本机 localStorage，卸载 App 或清理数据会丢失，建议定期导出备份。</div>') +
       '</div>';
 
     // 自动快照：localStorage 一被清空就全没了，而「记得导出备份」没人做得到。
@@ -1796,7 +1798,7 @@
         break;
 
       /* ---- 数据 ---- */
-      case 'data:export': U.download('flashcards-backup-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(DB.exportAll(), null, 2)); U.toast(T('已导出'), 'ok'); break;
+      case 'data:export': exportBundleFlow(); break;
       case 'data:import': importBackupFlow(); break;
       case 'csv:export': csvExportFlow(); break;
       case 'csv:import': csvImportFlow(); break;
@@ -2626,32 +2628,115 @@
     render(true);
   }
 
-  function importBackupFlow() {
-    U.pickFile('.json,application/json').then(function (f) {
-      if (!f) return;
-      var data;
-      try { data = JSON.parse(f.text); }
-      catch (e) { U.toast(T('文件不是合法 JSON'), 'error'); return; }
-      U.confirmBox(T('导入备份'), T('选择「合并」会保留现有数据（重复牌组自动改名）；选择「替换」将清空现有数据。'), T('合并导入')).then(function (ok) {
-        try {
-          if (ok) {
-            var r = DB.importAll(data, 'merge');
-            U.toast(T('合并完成：{n} 牌组 / ', {n: r.decks}) + r.cards + T(' 卡片'), 'ok');
-            if (data.plugins) {
-              data.plugins.forEach(function (p) { try { Plugins.install(p, { overwrite: true }); } catch (e) { } });
-              refreshPluginCSS();
-            }
-            render(true);
-          } else {
-            return U.confirmBox(T('替换导入'), T('这会清空当前所有数据，确定吗？'), T('确认替换')).then(function (ok2) {
-              if (!ok2) return;
-              DB.importAll(data, 'replace');
-              U.toast(T('替换导入完成'), 'ok');
-              render(true);
-            });
-          }
-        } catch (e) { U.toast(T('导入失败：') + e.message, 'error'); }
+  /* ---------------- 备份：导出 / 导入 ----------------
+   * 备份就是一只普通 zip（见 DB.exportBundle）：牌组与卡片、成长数据、
+   * 设置、自定义 CSS、每个插件各占一个文件。这样做的好处不只是「看起来清楚」，
+   * 而是它可以被外部工具拆开改：换肤只要把 custom.css 换掉再打回去。
+   */
+  function bundleFileName() {
+    return 'flashcards-backup-' + new Date().toISOString().slice(0, 10) + '.zip';
+  }
+
+  function exportBundleFlow() {
+    var files, bytes;
+    try { files = DB.exportBundle(); }
+    catch (e) { U.toast(T('导出失败：') + e.message, 'error'); return; }
+    try { bytes = Zip.write(files); }
+    catch (e) { U.toast(T('打包失败：') + e.message, 'error'); return; }
+    U.downloadBytes(bundleFileName(), bytes, 'application/zip');
+    U.toast(T('已导出备份（{n} 个文件）', { n: files.length }), 'ok');
+  }
+
+  function bundleSummary(m) {
+    if (!m || !m.counts) return T('未知内容');
+    return T('牌组 {d} 个 · 卡片 {c} 张 · 插件 {p} 个', { d: m.counts.decks, c: m.counts.cards, p: m.counts.plugins });
+  }
+
+  function applyBundle(files, mode) {
+    var r;
+    try { r = DB.importBundle(files, mode); }
+    catch (e) { U.toast(T('导入失败：') + e.message, 'error'); return null; }
+    refreshPluginCSS();
+    render(true);
+    var parts = [];
+    if (r.decks) parts.push(T('{n} 个牌组', { n: r.decks }));
+    if (r.cards) parts.push(T('{n} 张卡片', { n: r.cards }));
+    if (r.growth) parts.push(T('成长数据'));
+    if (r.css) parts.push(T('自定义 CSS'));
+    if (r.plugins) parts.push(T('{n} 个插件', { n: r.plugins }));
+    if (r.settings && !parts.length) parts.push(T('设置'));
+    U.toast(T('已导入：') + (parts.join(T('、')) || T('没有可导入的内容')), 'ok');
+    if (r.skipped && r.skipped.length) {
+      U.toast(T('跳过了 {n} 项：', { n: r.skipped.length }) + r.skipped.join(T('、')), 'error');
+    }
+    return r;
+  }
+
+  function confirmBundleImport(files) {
+    var m = null;
+    if (files['manifest.json']) { try { m = JSON.parse(files['manifest.json']); } catch (e) { m = null; } }
+    var head = T('这个包里是：') + bundleSummary(m) + T('。');
+    U.confirmBox(
+      T('导入备份'),
+      head + T('选择「合并」会保留现有数据（重复牌组自动改名）；选择「替换」将清空现有数据。'),
+      T('合并导入')
+    ).then(function (ok) {
+      if (ok) { applyBundle(files, 'merge'); return; }
+      return U.confirmBox(T('替换导入'), T('这会清空当前所有数据，确定吗？'), T('确认替换')).then(function (ok2) {
+        if (ok2) applyBundle(files, 'replace');
       });
+    });
+  }
+
+  function importBundleFile(f) {
+    Zip.read(f.bytes).then(function (entries) {
+      var files = {};
+      entries.forEach(function (e) {
+        var n = String(e.name || '').replace(/\\/g, '/').replace(/^\.\//, '');
+        if (!n || /\/$/.test(n)) return;                 // 目录项
+        if (n.indexOf('__MACOSX/') === 0 || n.split('/').pop() === '.DS_Store') return; // mac 打的包
+        files[n] = Zip.text(e.bytes);
+      });
+      if (!DB.isBundle(files)) { U.toast(T('这个 zip 里没有本 App 的备份文件'), 'error'); return; }
+      confirmBundleImport(files);
+    }).catch(function (e) {
+      U.toast(T('读取 zip 失败：') + e.message, 'error');
+    });
+  }
+
+  /** 老的 .json 备份仍然吃得下（很多人手里还有） */
+  function importJsonFile(f) {
+    var data;
+    try { data = JSON.parse(Zip.text(f.bytes)); }
+    catch (e) { U.toast(T('文件不是合法 JSON'), 'error'); return; }
+    U.confirmBox(T('导入备份'), T('选择「合并」会保留现有数据（重复牌组自动改名）；选择「替换」将清空现有数据。'), T('合并导入')).then(function (ok) {
+      try {
+        if (ok) {
+          var r = DB.importAll(data, 'merge');
+          U.toast(T('合并完成：{n} 牌组 / ', { n: r.decks }) + r.cards + T(' 卡片'), 'ok');
+          if (data.plugins) {
+            data.plugins.forEach(function (p) { try { Plugins.install(p, { overwrite: true }); } catch (e) { } });
+            refreshPluginCSS();
+          }
+          render(true);
+        } else {
+          return U.confirmBox(T('替换导入'), T('这会清空当前所有数据，确定吗？'), T('确认替换')).then(function (ok2) {
+            if (!ok2) return;
+            DB.importAll(data, 'replace');
+            U.toast(T('替换导入完成'), 'ok');
+            render(true);
+          });
+        }
+      } catch (e) { U.toast(T('导入失败：') + e.message, 'error'); }
+    });
+  }
+
+  function importBackupFlow() {
+    U.pickFileBinary('.zip,.json,application/zip,application/json').then(function (f) {
+      if (!f || !f.bytes || !f.bytes.length) return;
+      // 认 zip 的魔数而不是扩展名：别人改名成 .json 也照样能读
+      var isZip = f.bytes.length > 3 && f.bytes[0] === 0x50 && f.bytes[1] === 0x4b;
+      if (isZip) importBundleFile(f); else importJsonFile(f);
     });
   }
 
