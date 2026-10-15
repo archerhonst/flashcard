@@ -20,7 +20,7 @@
   <img src="docs/04-english.png" width="170" alt="English 界面">
 </p>
 
-**文档** &nbsp;·&nbsp; [插件开发文档](插件开发文档.md) &nbsp;·&nbsp; [打包成 APK](android/README-打包.md) &nbsp;·&nbsp; [自检说明](#自检)
+**下载** &nbsp;·&nbsp; [⬇️ 最新 APK](https://github.com/archerhonst/flashcard/releases/latest) &nbsp;&nbsp;|&nbsp;&nbsp; **文档** &nbsp;·&nbsp; [插件开发文档](插件开发文档.md) &nbsp;·&nbsp; [自检说明](#自检)
 
 </div>
 
@@ -38,7 +38,7 @@
   - [界面语言](#界面语言)
   - [外观与自定义 CSS](#外观与自定义-css)
 - [配置 AI](#配置-ai)
-- [封装成 APK](#封装成-apk)
+- [下载 APK](#下载-apk)
 - [自检](#自检)
 - [文件结构](#文件结构)
 - [已知边界](#已知边界)
@@ -87,9 +87,10 @@ python3 -m http.server 8000     # 然后浏览器打开 http://localhost:8000
 在手机浏览器里打开上面的地址，选「添加到主屏幕」，得到一个接近原生 App 的体验。
 如果你只是自己用，**这条路比封装 APK 省事得多**。
 
-### 3. 封装成 APK
+### 3. 下载 APK（Android）
 
-见 [封装成 APK](#封装成-apk)。仓库里 `android/` 已经是一个可直接用 Android Studio 打开的完整工程。
+到 **[Releases](https://github.com/archerhonst/flashcard/releases/latest)** 下载最新的 `.apk`，
+在手机上点开装即可。装完就能**离线使用**，不需要再下载任何东西。详见 [下载 APK](#下载-apk)。
 
 ---
 
@@ -253,21 +254,28 @@ html[data-theme] { --radius: 20px; }
 
 ---
 
-## 封装成 APK
+## 下载 APK
 
-`android/` 是一个**可直接用 Android Studio 打开**的完整工程：Kotlin + WebView + 本地 assets。
-详细步骤见 **[android/README-打包.md](android/README-打包.md)**。极简版：
+**[⬇️ 下载最新版](https://github.com/archerhonst/flashcard/releases/latest)**
 
-1. 用 Android Studio 打开 `android/`（或命令行 `./gradlew assembleDebug`）
-2. `app/build.gradle.kts` 里已配好一个 Gradle 任务，会**自动把上层目录的 web 文件同步进 `assets/`** ——
-   你只改网页代码，构建时自动带进包里，不用手动复制
-3. 构建 → 得到 APK
+| | |
+|---|---|
+| 应用名 | Fcard |
+| 包名 | `com.shan.fcard` |
+| 版本 | 1.0.0 |
+| 系统要求 | Android 7.0（API 24）及以上 |
+| 权限 | `INTERNET`（AI 调用）；旧系统上的存储写入已用 `maxSdkVersion=28` 限定 |
 
-> 🔧 **发布前记得改 `applicationId`。** 现在是占位的 `com.example.flashcards`
-> （见 [`android/app/build.gradle.kts`](android/app/build.gradle.kts)），上架或分发前应改成你自己的包名。
-> `versionName` 当前是 `1.0.0`，`minSdk = 24` / `targetSdk = 34` / `compileSdk = 34`。
+首次安装需要在系统设置里允许「安装未知来源的应用」。
 
-工程已经处理好的坑：
+**APK 里已经打好了全部网页资源**（`index.html` / `app.css` / `js/` / `plugins/`），
+装完就能离线用，不需要额外下载任何东西。
+
+> 💾 数据存在 App 自己的 `localStorage` 里，**卸载即清空**。
+> 重要内容记得用「设置 → 导出备份」。
+
+<details>
+<summary>APK 壳做了哪些处理（技术细节）</summary>
 
 - **`file://` 加载**：assets 用 `WebViewAssetLoader` 映射到虚拟 https 域名
   （`https://appassets.androidplatform.net/assets/www/index.html`），
@@ -281,8 +289,10 @@ html[data-theme] { --radius: 20px; }
   避免直接杀进程丢掉最后的编辑
 - 屏幕旋转不重建 Activity（`configChanges`），避免正在编辑的卡片丢失
 - 非本站地址一律不在 App 内加载（防止第三方页面顶掉闪卡壳）
-- 只申请两个权限：`INTERNET`（AI 调用）和 `WRITE_EXTERNAL_STORAGE`
-  （已用 `maxSdkVersion="28"` 限定只在 Android 9 及以下生效）
+
+</details>
+
+构建这个壳的工程源码在 [`android/`](android/README-打包.md)，随仓库一并保留，供需要改造时参考。
 
 ---
 
@@ -343,8 +353,8 @@ flashcard/
 │   ├── staticcheck.js      # 不执行代码，静态扫 172 项接缝 / DOM id / 资源 / 文案全覆盖
 │   └── check-apk-shell.js  # 可选：另一个 Java 壳工程的同步检查
 ├── 插件开发文档.md          # ★ 插件 API 完整参考
-└── android/                # APK 封装工程（Kotlin）
-    └── README-打包.md       # ★ 打包步骤、签名、排错
+└── android/                # APK 壳工程源码（Kotlin + WebView，供改造参考）
+    └── README-打包.md       # 工程结构、壳与网页的接口约定、排错
 ```
 
 代码组织刻意保持「一个大文件一件事」的粒度，全部用 IIFE 挂到 `window`，
