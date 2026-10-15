@@ -1155,6 +1155,30 @@ function checkGrowth() {
       return Object.keys(Game._state().claimed).length === n;
     })());
 
+    /* ---- 成长数据要能跟着「完整备份」一起走 ---- */
+    const xpBefore = Game._state().xp;
+    const dump = DB.exportAll();
+    ok('完整备份里带着成长数据', !!dump.growth && dump.growth.format === 'flashcards-growth');
+    eq('完整备份里的经验就是当前经验', dump.growth.profile.xp, xpBefore);
+
+    // 把成长状态清空，再用完整备份恢复，经验/徽章/流水都该回来
+    const badgeIds = Object.keys(Game._state().badges).sort().join(',');
+    const statsBefore = Object.keys(Game._stats()).length;
+    Game._reset();
+    eq('重置后经验归零', Game._state().xp, 0);
+    DB.importAll(dump, 'replace');
+    ok('完整备份能把经验恢复回来（不会因为重置就永久丢掉）', Game._state().xp >= xpBefore, Game._state().xp + ' >= ' + xpBefore);
+    // 徽章只比 id 集合：导入时的解锁时间戳会重新打，不该拿毫秒数做断言
+    eq('完整备份能把徽章恢复回来', Object.keys(Game._state().badges).sort().join(','), badgeIds);
+    eq('完整备份能把每日流水恢复回来', Object.keys(Game._stats()).length, statsBefore);
+
+    // 老备份里没有 growth 字段时不能炸
+    const old = DB.exportAll();
+    delete old.growth;
+    let threw = '';
+    try { DB.importAll(old, 'merge'); } catch (e) { threw = e.message; }
+    eq('没有 growth 字段的老备份照样能导入', threw, '');
+
     I18n.setLang(I18n.lang());
   }
 }

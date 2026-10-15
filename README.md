@@ -9,8 +9,8 @@
 
 [![无需构建](https://img.shields.io/badge/build-none%20needed-blue?style=flat-square)](#快速开始)
 [![零依赖](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)](#文件结构)
-[![行为测试](https://img.shields.io/badge/selftest-360%20passing-brightgreen?style=flat-square)](#自检)
-[![静态检查](https://img.shields.io/badge/staticcheck-172%20passing-brightgreen?style=flat-square)](#自检)
+[![行为测试](https://img.shields.io/badge/selftest-484%20passing-brightgreen?style=flat-square)](#自检)
+[![静态检查](https://img.shields.io/badge/staticcheck-178%20passing-brightgreen?style=flat-square)](#自检)
 [![界面语言](https://img.shields.io/badge/i18n-简体中文%20%7C%20English-orange?style=flat-square)](#界面语言)
 
 <p>
@@ -387,7 +387,7 @@ node tools/check-apk-shell.js    # 可选：检查打包器里那份网页副本
 全绿的样子：
 
 ```
-✓ 全部通过：477 项检查
+✓ 全部通过：484 项检查
 ✓ 静态检查全部通过：178 项
 ```
 
@@ -428,7 +428,7 @@ flashcard/
 ├── plugins/                # 示例插件（都是可以直接导入的 .json）
 ├── docs/                   # README 用的截图
 ├── tools/                  # 自检脚本
-│   ├── selftest.js         # 把核心逻辑加载进 Node，跑 477 项行为测试
+│   ├── selftest.js         # 把核心逻辑加载进 Node，跑 484 项行为测试
 │   ├── staticcheck.js      # 不执行代码，静态扫 178 项接缝 / DOM id / 资源 / 文案全覆盖
 │   └── check-apk-shell.js  # 可选：比对打包器里的网页副本与本体
 ├── 插件开发文档.md          # ★ 插件 API 完整参考
